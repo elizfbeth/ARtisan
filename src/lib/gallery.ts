@@ -1,11 +1,3 @@
-/**
- * World Labs Marble API Client
- * 
- * Integration with World Labs' Marble platform for:
- * - Fetching world templates from the gallery
- * - Accessing world details and 3D assets
- * - Supporting multiple 3D formats (MPI, SPZ, PLY, panoramas)
- */
 
 /**
  * Panorama metadata for layered rendering
@@ -82,9 +74,9 @@ export interface Stats {
 }
 
 /**
- * Complete World Labs world data structure
+ * Complete gallery template data structure
  */
-export interface WorldLabsWorld {
+export interface GalleryWorld {
   id: string;
   display_name: string;
   status: "PENDING" | "IN_PROGRESS" | "SUCCEEDED" | "FAILED";
@@ -114,15 +106,16 @@ export interface WorldTemplate {
 }
 
 /**
- * World Labs API client configuration
+ * Gallery API client configuration
+ * Note: API endpoints are placeholders - the system uses mock data for templates
  */
-const WORLDLABS_API_BASE = "https://marble2-kgw-prod-iac1.wlt-ai.art";
-const WORLDLABS_CDN_BASE = "https://cdn.marble.worldlabs.ai";
+const GALLERY_API_BASE = "https://api.artisan-gallery.app"; // Placeholder - not used
+const GALLERY_CDN_BASE = "https://cdn.marble.worldlabs.ai"; // Real CDN for mock data
 
 /**
  * Convert full world data to simplified template for UI
  */
-export function worldToTemplate(world: WorldLabsWorld): WorldTemplate {
+export function worldToTemplate(world: GalleryWorld): WorldTemplate {
   // Extract thumbnail from MPI URL or use cond_image
   const thumbnailUrl = world.generation_output.cond_image_url;
   
@@ -141,8 +134,8 @@ export function worldToTemplate(world: WorldLabsWorld): WorldTemplate {
 }
 
 /**
- * Fetch a list of public world templates from World Labs
- * Note: This endpoint needs to be discovered from network requests
+ * Fetch a list of public world templates from the gallery
+ * Note: This endpoint needs to be configured
  * 
  * @param filters - Optional filters (tags, search query, etc.)
  * @returns Array of world templates
@@ -154,8 +147,7 @@ export async function fetchWorldTemplates(filters?: {
   offset?: number;
 }): Promise<WorldTemplate[]> {
   try {
-    // TODO: Replace with actual endpoint once discovered
-    // Likely: GET /api/v1/worlds?public=true&tags=curated
+    // TODO: Replace with actual endpoint once configured
     const params = new URLSearchParams();
     
     if (filters?.tags && filters.tags.length > 0) {
@@ -174,7 +166,7 @@ export async function fetchWorldTemplates(filters?: {
       params.append("offset", filters.offset.toString());
     }
 
-    const url = `${WORLDLABS_API_BASE}/api/v1/worlds?${params.toString()}`;
+    const url = `${GALLERY_API_BASE}/api/v1/worlds?${params.toString()}`;
     
     const response = await fetch(url, {
       method: "GET",
@@ -184,58 +176,50 @@ export async function fetchWorldTemplates(filters?: {
     });
 
     if (!response.ok) {
-      throw new Error(`World Labs API error: ${response.status} ${response.statusText}`);
+      throw new Error(`Gallery API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
     
-    // Assuming response is { worlds: WorldLabsWorld[] }
-    const worlds: WorldLabsWorld[] = data.worlds || data;
+    // Assuming response is { worlds: GalleryWorld[] }
+    const worlds: GalleryWorld[] = data.worlds || data;
     
     // Filter only succeeded worlds
     const succeededWorlds = worlds.filter(w => w.status === "SUCCEEDED");
     
     return succeededWorlds.map(worldToTemplate);
   } catch (error) {
-    console.error("Failed to fetch World Labs templates:", error);
+    console.error("Failed to fetch gallery templates:", error);
     throw error;
   }
 }
 
 /**
  * Fetch detailed world data by ID
+ * NOTE: This function is for future API integration
+ * Currently, the system uses MOCK_WORLDS data directly
  * 
  * @param worldId - Unique world identifier
  * @returns Complete world data with all asset URLs
  */
-export async function fetchWorldDetails(worldId: string): Promise<WorldLabsWorld> {
-  try {
-    // TODO: Replace with actual endpoint once discovered
-    // Likely: GET /api/v1/worlds/{worldId}
-    const url = `${WORLDLABS_API_BASE}/api/v1/worlds/${worldId}`;
-    
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`World Labs API error: ${response.status} ${response.statusText}`);
-    }
-
-    const world: WorldLabsWorld = await response.json();
-    
-    if (world.status !== "SUCCEEDED") {
-      throw new Error(`World ${worldId} is not ready (status: ${world.status})`);
-    }
-    
-    return world;
-  } catch (error) {
-    console.error(`Failed to fetch world details for ${worldId}:`, error);
-    throw error;
+export async function fetchWorldDetails(worldId: string): Promise<GalleryWorld> {
+  // For now, use mock data instead of making API calls
+  const world = MOCK_WORLDS.find(w => w.id === worldId);
+  
+  if (!world) {
+    throw new Error(`Gallery world ${worldId} not found in templates. Available IDs: ${MOCK_WORLDS.map(w => w.id).join(", ")}`);
   }
+  
+  if (world.status !== "SUCCEEDED") {
+    throw new Error(`World ${worldId} is not ready (status: ${world.status})`);
+  }
+  
+  return world;
+  
+  // Future API implementation:
+  // const url = `${GALLERY_API_BASE}/api/v1/worlds/${worldId}`;
+  // const response = await fetch(url, { ... });
+  // return await response.json();
 }
 
 /**
@@ -245,7 +229,7 @@ export async function fetchWorldDetails(worldId: string): Promise<WorldLabsWorld
  * @param world - World data
  * @returns Object with format type and URL
  */
-export function getBest3DFormat(world: WorldLabsWorld): {
+export function getBest3DFormat(world: GalleryWorld): {
   format: "spz" | "panoramas" | "mpi" | "ply" | "collider";
   url: string;
   metadata?: PanoramaMetadata[];
@@ -302,7 +286,7 @@ export function getBest3DFormat(world: WorldLabsWorld): {
  * @param world - World data
  * @returns Array of panorama URLs with positions
  */
-export async function getPanoramaUrls(world: WorldLabsWorld): Promise<Array<{
+export async function getPanoramaUrls(world: GalleryWorld): Promise<Array<{
   url: string;
   position: [number, number, number];
   quaternion: [number, number, number, number];
@@ -314,7 +298,6 @@ export async function getPanoramaUrls(world: WorldLabsWorld): Promise<Array<{
   }
   
   // Extract base URL from posed_panos_url
-  // Format: https://cdn.marble.worldlabs.ai/{world_id}/{hash}_panos
   const baseUrl = output.posed_panos_url;
   
   return output.panos_metadata.map((pano) => ({
@@ -326,9 +309,9 @@ export async function getPanoramaUrls(world: WorldLabsWorld): Promise<Array<{
 
 /**
  * Mock data for development/testing
- * Multiple example worlds from World Labs
+ * Multiple example template worlds
  */
-export const MOCK_WORLDS: WorldLabsWorld[] = [
+export const MOCK_WORLDS: GalleryWorld[] = [
   {
     id: "799ac993-86ab-4091-b326-86f3d54448e5",
     display_name: "Tropical sunset beach panorama",
@@ -343,7 +326,7 @@ export const MOCK_WORLDS: WorldLabsWorld[] = [
       pinned: false,
     },
     generation_input: {
-      model: "Marble 0.1-plus",
+      model: "AI Generation",
       seed: null,
       prompt: {
         image_prompt: {},
@@ -397,7 +380,7 @@ export const MOCK_WORLDS: WorldLabsWorld[] = [
       pinned: false,
     },
     generation_input: {
-      model: "Marble 0.1-plus",
+      model: "AI Generation",
       seed: null,
       prompt: {
         image_prompt: {},

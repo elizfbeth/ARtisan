@@ -9,24 +9,24 @@ import { Id } from "./_generated/dataModel";
  */
 
 /**
- * Create a new scene (from photo upload or World Labs template)
+ * Create a new scene (from photo upload or gallery template)
  */
 export const create = mutation({
   args: {
     photoUrl: v.string(),
     photoStoragePath: v.string(),
     userId: v.optional(v.string()),
-    worldLabsWorldId: v.optional(v.string()),
-    worldLabsSource: v.optional(v.union(v.literal("template"), v.literal("generated"))),
+    galleryWorldId: v.optional(v.string()),
+    gallerySource: v.optional(v.union(v.literal("template"), v.literal("generated"))),
   },
   handler: async (ctx, args) => {
     const sceneId = await ctx.db.insert("scenes", {
       userId: args.userId,
       photoUrl: args.photoUrl,
       photoStoragePath: args.photoStoragePath,
-      worldLabsWorldId: args.worldLabsWorldId,
-      worldLabsSource: args.worldLabsSource,
-      status: args.worldLabsWorldId ? "generating" : "analyzing",
+      galleryWorldId: args.galleryWorldId,
+      gallerySource: args.gallerySource,
+      status: args.galleryWorldId ? "generating" : "analyzing",
       objects: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -110,14 +110,14 @@ export const updateEnvironment = mutation({
     environmentTextureUrl: v.string(),
     environmentStoragePath: v.string(),
     environmentType: v.string(),
-    worldLabsWorldId: v.optional(v.string()),
+    galleryWorldId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.sceneId, {
       environmentTextureUrl: args.environmentTextureUrl,
       environmentStoragePath: args.environmentStoragePath,
       environmentType: args.environmentType,
-      worldLabsWorldId: args.worldLabsWorldId,
+      galleryWorldId: args.galleryWorldId,
       status: "ready",
       updatedAt: Date.now(),
     });

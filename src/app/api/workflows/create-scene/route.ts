@@ -10,7 +10,7 @@ import { Id } from "@/convex/_generated/dataModel";
  * 
  * Orchestrates AR environment creation:
  * - Photo upload → AI generation workflow
- * - World Labs template selection workflow
+ * - Gallery template selection workflow
  * - Executes appropriate workflow and updates Convex
  */
 
@@ -22,18 +22,18 @@ export async function POST(request: NextRequest) {
     sceneId?: string;
     photoUrl?: string;
     environmentSource?: string;
-    worldLabsWorldId?: string;
+    galleryWorldId?: string;
   } = {};
   
   try {
     body = await request.json();
-    const { sceneId, photoUrl, environmentSource, worldLabsWorldId } = body;
+    const { sceneId, photoUrl, environmentSource, galleryWorldId } = body;
 
     // Validate based on environment source
-    if (environmentSource === "worldlabs-template") {
-      if (!worldLabsWorldId) {
+    if (environmentSource === "gallery-template") {
+      if (!galleryWorldId) {
         return NextResponse.json(
-          { error: "World Labs world ID is required for template workflow" },
+          { error: "Gallery world ID is required for template workflow" },
           { status: 400 }
         );
       }
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create scene if sceneId not provided (for World Labs workflow)
+    // Create scene if sceneId not provided (for gallery workflow)
     let sceneIdTyped: Id<"scenes">;
     
     if (sceneId) {
@@ -57,8 +57,8 @@ export async function POST(request: NextRequest) {
       sceneIdTyped = await convex.mutation(api.scenes.create, {
         photoUrl: photoUrl || "",
         photoStoragePath: "",
-        worldLabsWorldId: worldLabsWorldId,
-        worldLabsSource: environmentSource === "worldlabs-template" ? "template" : undefined,
+        galleryWorldId: galleryWorldId,
+        gallerySource: environmentSource === "gallery-template" ? "template" : undefined,
       });
       console.log("Created new scene:", sceneIdTyped);
     }
@@ -68,20 +68,20 @@ export async function POST(request: NextRequest) {
     // Update scene status to analyzing/generating
     await convex.mutation(api.scenes.updateStatus, {
       sceneId: sceneIdTyped,
-      status: environmentSource === "worldlabs-template" ? "generating" : "analyzing",
+      status: environmentSource === "gallery-template" ? "generating" : "analyzing",
     });
 
     // Execute the scene creation workflow
     const result = await executeSceneCreation({
       photoUrl,
       sceneId: sceneIdTyped as string,
-      environmentSource: environmentSource as "generate" | "worldlabs-template" | undefined,
-      worldLabsWorldId,
+      environmentSource: environmentSource as "generate" | "gallery-template" | undefined,
+      galleryWorldId,
     });
 
     console.log("Scene creation complete:", result);
 
-    // Update Convex with analysis results (optional for World Labs)
+    // Update Convex with analysis results (optional for gallery templates)
     if (result.analysis) {
       await convex.mutation(api.scenes.updateAnalysis, {
         sceneId: sceneIdTyped,
@@ -89,13 +89,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Update Convex with environment texture and World Labs data
+    // Update Convex with environment texture and gallery data
     await convex.mutation(api.scenes.updateEnvironment, {
       sceneId: sceneIdTyped,
       environmentTextureUrl: result.environmentTextureUrl,
       environmentStoragePath: result.environmentStoragePath,
       environmentType: result.environmentType,
-      worldLabsWorldId: result.worldLabsWorldId,
+      galleryWorldId: result.galleryWorldId,
     });
 
     // Update waypoints if provided

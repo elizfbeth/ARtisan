@@ -12,15 +12,15 @@ import AnimatedObject from "./AnimatedObject";
 import ObjectInspector from "./ObjectInspector";
 import CameraController, { CameraModeHUD, CameraMode } from "./CameraController";
 import { AmbientAudioManager } from "./SpatialAudio";
-import EnvironmentController, { TimeOfDay, TimeControlPanel } from "./EnvironmentController";
-import WeatherSystem, { WeatherType, WeatherControlPanel } from "./WeatherSystem";
+import EnvironmentController, { TimeOfDay } from "./EnvironmentController";
+import WeatherSystem, { WeatherType } from "./WeatherSystem";
 import Waypoints, { Minimap } from "./Waypoints";
 import FeedbackEffects from "./FeedbackEffects";
 import PhysicsWorld from "./PhysicsWorld";
 import SceneChat from "./SceneChat";
 import { useHaptics } from "@/hooks/useHaptics";
-import WorldLabsPanoramaRenderer from "./WorldLabsPanoramaRenderer";
-import { fetchWorldDetails, getPanoramaUrls } from "@/lib/worldlabs";
+import GalleryPanoramaRenderer from "./GalleryPanoramaRenderer";
+import { fetchWorldDetails, getPanoramaUrls } from "@/lib/gallery";
 
 /**
  * Enhanced ARViewer Component
@@ -49,7 +49,7 @@ interface SceneObject {
 
 interface ARViewerProps {
   environmentTextureUrl?: string;
-  worldLabsWorldId?: string;
+  galleryWorldId?: string;
   objects: SceneObject[];
   audioUrl?: string;
   waypoints?: Array<{
@@ -238,9 +238,9 @@ function LoadingFallback() {
 }
 
 /**
- * World Labs environment component with navigation support
+ * Gallery environment component with navigation support
  */
-function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }) {
+function GalleryEnvironment({ galleryWorldId }: { galleryWorldId: string }) {
   const [panoramas, setPanoramas] = useState<Array<{
     url: string;
     position: [number, number, number];
@@ -256,17 +256,17 @@ function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }
   const { scene } = useThree();
 
   useEffect(() => {
-    const loadWorldLabs = async () => {
+    const loadGallery = async () => {
       try {
         setLoading(true);
-        const data = await fetchWorldDetails(worldLabsWorldId);
+        const data = await fetchWorldDetails(galleryWorldId);
         setWorldData(data);
         const panos = await getPanoramaUrls(data);
         setPanoramas(panos);
-        
+
         // Load collision mesh for navigation
         if (data.generation_output.collider_mesh_url) {
-          console.log("Loading World Labs collision mesh for navigation...");
+          console.log("Loading collision mesh for navigation...");
           const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
           const loader = new GLTFLoader();
           
@@ -302,32 +302,32 @@ function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }
         
         setError(null);
       } catch (err) {
-        console.error("Failed to load World Labs environment:", err);
-        setError("Failed to load World Labs environment");
+        console.error("Failed to load gallery environment:", err);
+        setError("Failed to load gallery environment");
       } finally {
         setLoading(false);
       }
     };
 
-    loadWorldLabs();
+    loadGallery();
 
     return () => {
       // Cleanup collision mesh on unmount
       const objectsToRemove: THREE.Object3D[] = [];
       scene.traverse((object) => {
-        if (object.userData.isWorldLabsCollider) {
+        if (object.userData.isGalleryCollider) {
           objectsToRemove.push(object);
         }
       });
       objectsToRemove.forEach((obj) => scene.remove(obj));
     };
-  }, [worldLabsWorldId, scene]);
+  }, [galleryWorldId, scene]);
 
   if (loading) {
     return (
       <Html center>
         <div className="bg-black bg-opacity-75 text-white px-4 py-2 rounded">
-          Loading World Labs environment...
+          Loading gallery environment...
         </div>
       </Html>
     );
@@ -345,7 +345,7 @@ function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }
   return (
     <>
       {/* Panoramas for visual environment */}
-      <WorldLabsPanoramaRenderer panoramas={panoramas} />
+      <GalleryPanoramaRenderer panoramas={panoramas} />
       
       {/* Ground plane for navigation if no collision mesh */}
       {!worldData?.generation_output.collider_mesh_url && (
@@ -371,20 +371,19 @@ function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }
  */
 function ARScene({
   environmentTextureUrl,
-  worldLabsWorldId,
+  galleryWorldId,
   objects,
   waypoints,
   selectedObjectId,
   onObjectSelect,
   onObjectTransformChange,
   onObjectDelete,
-  cameraMode: _cameraMode,
   timeOfDay,
   weather,
   enablePhysics,
 }: {
   environmentTextureUrl?: string;
-  worldLabsWorldId?: string;
+  galleryWorldId?: string;
   objects: SceneObject[];
   waypoints?: Array<{
     id: string;
@@ -402,7 +401,6 @@ function ARScene({
     }
   ) => void;
   onObjectDelete?: (objectId: string) => void;
-  cameraMode: CameraMode;
   timeOfDay: TimeOfDay;
   weather: WeatherType;
   enablePhysics: boolean;
@@ -415,10 +413,10 @@ function ARScene({
       {/* Weather System */}
       <WeatherSystem weather={weather} intensity={0.5} />
 
-      {/* Environment - World Labs or Standard */}
-      {worldLabsWorldId ? (
+      {/* Environment - Gallery or Standard */}
+      {galleryWorldId ? (
         <Suspense fallback={null}>
-          <WorldLabsEnvironment worldLabsWorldId={worldLabsWorldId} />
+          <GalleryEnvironment galleryWorldId={galleryWorldId} />
         </Suspense>
       ) : environmentTextureUrl ? (
         <Suspense fallback={null}>
@@ -485,10 +483,11 @@ function AudioPlayer({ audioUrl, isPlaying }: { audioUrl?: string; isPlaying: bo
       audioRef.current.volume = 0.5;
       
       const handleCanPlay = () => setIsLoading(false);
-      audioRef.current.addEventListener("canplay", handleCanPlay);
+      const audio = audioRef.current;
+      audio.addEventListener("canplay", handleCanPlay);
       
       return () => {
-        audioRef.current?.removeEventListener("canplay", handleCanPlay);
+        audio.removeEventListener("canplay", handleCanPlay);
       };
     }
   }, [audioUrl]);
@@ -542,7 +541,7 @@ function AudioPlayer({ audioUrl, isPlaying }: { audioUrl?: string; isPlaying: bo
  */
 export default function ARViewer({
   environmentTextureUrl,
-  worldLabsWorldId,
+  galleryWorldId,
   objects,
   audioUrl,
   waypoints,
@@ -552,12 +551,10 @@ export default function ARViewer({
 }: ARViewerProps) {
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [cameraMode, setCameraMode] = useState<CameraMode>("first-person");
-  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>("noon");
-  const [weather, setWeather] = useState<WeatherType>("clear");
-  const [enablePhysics, setEnablePhysics] = useState(false);
   const [isAudioPlaying] = useState(false);
   const [playerPosition, setPlayerPosition] = useState({ x: 0, z: 0 });
   const [isPointerLocked, setIsPointerLocked] = useState(false);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   /**
    * Deselect object when clicking empty space
@@ -579,7 +576,7 @@ export default function ARViewer({
       {!isPointerLocked && cameraMode === "first-person" && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
           <div className="bg-black bg-opacity-75 text-white px-6 py-4 rounded-lg text-center">
-            <p className="text-lg font-semibold">Click to Enter 3D World</p>
+            <p className="text-lg font-semibold">Click the Scene to Enter 3D World</p>
             <p className="text-sm mt-2">WASD - Move | Mouse - Look Around | Shift - Sprint</p>
             <p className="text-xs mt-1 opacity-75">Press ESC to exit | Tab to switch camera</p>
           </div>
@@ -587,115 +584,107 @@ export default function ARViewer({
       )}
 
       {/* Controls hint */}
-      <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-4 py-2 rounded">
+      <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-4 py-2 rounded pointer-events-auto">
         <p className="font-semibold mb-1">Navigation:</p>
         <p className="text-sm">WASD - Move | Shift - Sprint | Space - Jump</p>
         <p className="text-sm">Mouse - Look | Tab - Camera Mode | ESC - Exit</p>
       </div>
 
       {/* Camera Mode HUD */}
-      <CameraModeHUD mode={cameraMode} />
-
-      {/* Time of Day Control */}
-      <TimeControlPanel timeOfDay={timeOfDay} onTimeChange={setTimeOfDay} />
-
-      {/* Weather Control */}
-      <WeatherControlPanel weather={weather} onWeatherChange={setWeather} />
-
-      {/* Physics Toggle */}
-      <div className="absolute top-[360px] left-4 bg-white bg-opacity-90 rounded-lg shadow-lg p-4 z-10">
-        <label className="flex items-center gap-2 text-sm font-semibold text-gray-800 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={enablePhysics}
-            onChange={(e) => setEnablePhysics(e.target.checked)}
-            className="w-4 h-4"
-          />
-          Enable Physics
-        </label>
+      <div className="pointer-events-auto">
+        <CameraModeHUD mode={cameraMode} />
       </div>
 
       {/* 3D Canvas */}
-      <Canvas
-        camera={{ position: [0, 1.6, 5], fov: 75 }}
-        gl={{ antialias: true }}
-        shadows
-        onClick={handleCanvasClick}
-      >
-        <Suspense fallback={<LoadingFallback />}>
-          <ARScene
-            environmentTextureUrl={environmentTextureUrl}
-            worldLabsWorldId={worldLabsWorldId}
-            objects={objects}
-            waypoints={waypoints}
-            selectedObjectId={selectedObjectId}
-            onObjectSelect={setSelectedObjectId}
-            onObjectTransformChange={onObjectUpdate}
-            onObjectDelete={onObjectDelete}
-            cameraMode={cameraMode}
-            timeOfDay={timeOfDay}
-            weather={weather}
-            enablePhysics={enablePhysics}
-          />
-        </Suspense>
-
-        {/* Camera Controller */}
-        <CameraController mode={cameraMode} onModeChange={setCameraMode} />
-
-        {/* First Person Controls */}
-        {cameraMode === "first-person" && (
-          <>
-            <TrackedPointerLockControls
-              onLock={() => setIsPointerLocked(true)}
-              onUnlock={() => setIsPointerLocked(false)}
+      <div ref={canvasRef} className="w-full h-full">
+        <Canvas
+          camera={{ position: [0, 1.6, 5], fov: 75 }}
+          gl={{ antialias: true }}
+          shadows
+          onClick={handleCanvasClick}
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <ARScene
+              environmentTextureUrl={environmentTextureUrl}
+              galleryWorldId={galleryWorldId}
+              objects={objects}
+              waypoints={waypoints}
+              selectedObjectId={selectedObjectId}
+              onObjectSelect={setSelectedObjectId}
+              onObjectTransformChange={onObjectUpdate}
+              onObjectDelete={onObjectDelete}
+              timeOfDay="noon"
+              weather="clear"
+              enablePhysics={false}
             />
-            <FirstPersonController
-              enabled={cameraMode === "first-person"}
-              onPositionChange={setPlayerPosition}
-            />
-          </>
-        )}
+          </Suspense>
 
-        {/* Spatial Audio (3D positioned) */}
-        <AmbientAudioManager audioUrl={audioUrl} isPlaying={isAudioPlaying} volume={0.5} />
-      </Canvas>
+          {/* Camera Controller */}
+          <CameraController mode={cameraMode} onModeChange={setCameraMode} />
+
+          {/* First Person Controls */}
+          {cameraMode === "first-person" && (
+            <>
+              <TrackedPointerLockControls
+                onLock={() => setIsPointerLocked(true)}
+                onUnlock={() => setIsPointerLocked(false)}
+              />
+              <FirstPersonController
+                enabled={cameraMode === "first-person"}
+                onPositionChange={setPlayerPosition}
+              />
+            </>
+          )}
+
+          {/* Spatial Audio (3D positioned) */}
+          <AmbientAudioManager audioUrl={audioUrl} isPlaying={isAudioPlaying} volume={0.5} />
+        </Canvas>
+      </div>
 
       {/* Object Inspector Panel */}
-      {selectedObject && (
-        <ObjectInspector
-          object={selectedObject}
-          onClose={() => setSelectedObjectId(null)}
-          onUpdate={(objectId, transform) => {
-            if (onObjectUpdate) {
-              onObjectUpdate(objectId, transform);
-            }
-          }}
-          onDelete={(objectId) => {
-            if (onObjectDelete) {
-              onObjectDelete(objectId);
-              setSelectedObjectId(null);
-            }
-          }}
-        />
-      )}
+      <div className="pointer-events-auto">
+        {selectedObject && (
+          <ObjectInspector
+            object={selectedObject}
+            onClose={() => setSelectedObjectId(null)}
+            onUpdate={(objectId, transform) => {
+              if (onObjectUpdate) {
+                onObjectUpdate(objectId, transform);
+              }
+            }}
+            onDelete={(objectId) => {
+              if (onObjectDelete) {
+                onObjectDelete(objectId);
+                setSelectedObjectId(null);
+              }
+            }}
+          />
+        )}
+      </div>
 
       {/* Minimap */}
-      {waypoints && waypoints.length > 0 && (
-        <Minimap waypoints={waypoints} playerPosition={playerPosition} />
-      )}
+      <div className="pointer-events-auto">
+        {waypoints && waypoints.length > 0 && (
+          <Minimap waypoints={waypoints} playerPosition={playerPosition} />
+        )}
+      </div>
 
       {/* Audio player - always visible */}
-      <AudioPlayer audioUrl={audioUrl} isPlaying={isAudioPlaying} />
+      <div className="pointer-events-auto">
+        <AudioPlayer audioUrl={audioUrl} isPlaying={isAudioPlaying} />
+      </div>
 
       {/* AI Chat Assistant */}
-      <SceneChat
-        sceneContext={{
-          environmentType: sceneContext?.environmentType,
-          mood: sceneContext?.mood,
-          locationName: sceneContext?.locationName,
-          objects: objects.map((obj) => ({ name: obj.name })),
-        }}
-      />
+      <div className="pointer-events-auto">
+        <SceneChat
+          sceneContext={{
+            environmentType: sceneContext?.environmentType,
+            mood: sceneContext?.mood,
+            locationName: sceneContext?.locationName,
+            objects: objects.map((obj) => ({ name: obj.name })),
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -5,9 +5,9 @@ import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 
 /**
- * WorldLabsPanoramaRenderer Component
+ * GalleryPanoramaRenderer Component
  * 
- * Renders World Labs panoramic environments using multi-plane images:
+ * Renders panoramic environments using multi-plane images:
  * - Loads multiple panorama layers at different depths
  * - Creates parallax effect as camera moves
  * - Uses equirectangular mapping for 360° view
@@ -19,7 +19,7 @@ interface PanoramaLayer {
   quaternion: [number, number, number, number];
 }
 
-interface WorldLabsPanoramaRendererProps {
+interface GalleryPanoramaRendererProps {
   panoramas: PanoramaLayer[];
   scale?: number;
 }
@@ -80,12 +80,12 @@ function PanoramaLoadingFallback() {
 /**
  * Main panorama renderer component
  */
-export default function WorldLabsPanoramaRenderer({
+export default function GalleryPanoramaRenderer({
   panoramas,
   scale = 100,
-}: WorldLabsPanoramaRendererProps) {
+}: GalleryPanoramaRendererProps) {
   if (!panoramas || panoramas.length === 0) {
-    console.warn("No panoramas provided to WorldLabsPanoramaRenderer");
+    console.warn("No panoramas provided to GalleryPanoramaRenderer");
     return null;
   }
 

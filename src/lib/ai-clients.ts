@@ -545,7 +545,7 @@ export async function generateAudioWithElevenLabs(prompt: string): Promise<Array
   // Based on ElevenLabs API v1 specification
   const requestBody = {
     text: truncatedPrompt,
-    duration_seconds: null, // Let ElevenLabs determine optimal duration (0.5-22s)
+    duration_seconds: 15, // Generate at least 15 seconds of audio (max: 22s)
     prompt_influence: 0.3, // Range: 0.0 to 1.0 (lower = more realistic, higher = more creative)
   };
   
@@ -553,7 +553,7 @@ export async function generateAudioWithElevenLabs(prompt: string): Promise<Array
     endpoint: "sound-generation",
     promptLength: truncatedPrompt.length,
     maxLength: MAX_PROMPT_LENGTH,
-    duration: 22,
+    duration: 15,
     promptInfluence: 0.3,
   });
   

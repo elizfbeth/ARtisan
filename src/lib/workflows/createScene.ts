@@ -7,28 +7,28 @@ import {
   fetchWorldDetails,
   getBest3DFormat,
   getPanoramaUrls,
-  WorldLabsWorld,
-} from "../worldlabs";
+  GalleryWorld,
+} from "../gallery";
 
 /**
- * Scene Creation Workflow - Enhanced with Location Intelligence & World Labs
+ * Scene Creation Workflow - Enhanced with Location Intelligence & Gallery Templates
  * 
  * Orchestrates the transformation of a user photo into an AR environment:
  * 1. Analyze photo with Gemini 2.5 Flash (includes location detection)
  * 2. Search for location-specific information using Exa AI
- * 3. Generate enhanced environment texture with fal.ai OR use World Labs template
+ * 3. Generate enhanced environment texture with fal.ai OR use Gallery template
  * 4. Store assets in Supabase
  * 
  * This workflow is typically triggered via Manus AI orchestration
  */
 
-export type EnvironmentSource = "generate" | "worldlabs-template";
+export type EnvironmentSource = "generate" | "gallery-template";
 
 export interface SceneCreationInput {
   photoUrl?: string;
   sceneId: string;
   environmentSource?: EnvironmentSource;
-  worldLabsWorldId?: string;
+  galleryWorldId?: string;
 }
 
 export interface SceneCreationResult {
@@ -53,9 +53,9 @@ export interface SceneCreationResult {
   };
   environmentTextureUrl: string;
   environmentStoragePath: string;
-  environmentType: "panorama" | "skybox" | "worldlabs";
-  worldLabsWorldId?: string;
-  worldLabsData?: WorldLabsWorld;
+  environmentType: "panorama" | "skybox" | "gallery";
+  galleryWorldId?: string;
+  galleryData?: GalleryWorld;
   waypoints?: Array<{
     id: string;
     position: { x: number; y: number; z: number };
@@ -73,9 +73,9 @@ export async function executeSceneCreation(
   
   const environmentSource = input.environmentSource || "generate";
   
-  // World Labs template workflow
-  if (environmentSource === "worldlabs-template" && input.worldLabsWorldId) {
-    return await executeWorldLabsWorkflow(input.sceneId, input.worldLabsWorldId);
+  // Gallery template workflow
+  if (environmentSource === "gallery-template" && input.galleryWorldId) {
+    return await executeGalleryWorkflow(input.sceneId, input.galleryWorldId);
   }
   
   // Standard AI generation workflow
@@ -128,18 +128,18 @@ export async function executeSceneCreation(
 }
 
 /**
- * Execute World Labs template workflow
+ * Execute Gallery template workflow
  */
-async function executeWorldLabsWorkflow(
+async function executeGalleryWorkflow(
   sceneId: string,
-  worldLabsWorldId: string
+  galleryWorldId: string
 ): Promise<SceneCreationResult> {
-  console.log("Using World Labs template:", worldLabsWorldId);
+  console.log("Using gallery template:", galleryWorldId);
   
-  // Step 1: Fetch World Labs world data
-  console.log("Step 1: Fetching World Labs world data...");
-  const worldData = await fetchWorldDetails(worldLabsWorldId);
-  console.log("World data fetched:", worldData.display_name);
+  // Step 1: Get gallery world data (uses mock data for now)
+  console.log("Step 1: Loading gallery world data...");
+  const worldData = await fetchWorldDetails(galleryWorldId);
+  console.log("World data loaded:", worldData.display_name);
   
   // Step 2: Get best available 3D format
   const format = getBest3DFormat(worldData);
@@ -155,12 +155,12 @@ async function executeWorldLabsWorkflow(
     }
   }
   
-  // Step 4: For storage path, just use the World Labs CDN URL directly
-  console.log("Step 4: Using World Labs CDN URL...");
-  const storagePath = `scenes/${sceneId}/worldlabs_${worldLabsWorldId}`;
+  // Step 4: For storage path, use the gallery CDN URL directly
+  console.log("Step 4: Using gallery CDN URL...");
+  const storagePath = `scenes/${sceneId}/gallery_${galleryWorldId}`;
   const environmentStoragePath = storagePath;
   
-  // Generate synthetic analysis from World Labs tags and data
+  // Generate synthetic analysis from gallery tags and data
   const analysis = {
     environmentType: worldData.tags.join(", ") || "immersive",
     keyObjects: [],
@@ -173,9 +173,9 @@ async function executeWorldLabsWorkflow(
     analysis,
     environmentTextureUrl,
     environmentStoragePath,
-    environmentType: "worldlabs",
-    worldLabsWorldId,
-    worldLabsData: worldData,
+    environmentType: "gallery",
+    galleryWorldId,
+    galleryData: worldData,
   };
 }
 

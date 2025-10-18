@@ -24,11 +24,18 @@ export default defineSchema({
   scenes: defineTable({
     userId: v.optional(v.string()),
     
-    // Original photo uploaded by user (optional for World Labs templates)
+    // Original photo uploaded by user (optional for gallery templates)
     photoUrl: v.optional(v.string()),
     photoStoragePath: v.optional(v.string()),
     
-    // World Labs integration
+    // Gallery integration (new field names)
+    galleryWorldId: v.optional(v.string()),
+    gallerySource: v.optional(v.union(
+      v.literal("template"),
+      v.literal("generated")
+    )),
+    
+    // Legacy field names (for backward compatibility with existing data)
     worldLabsWorldId: v.optional(v.string()),
     worldLabsSource: v.optional(v.union(
       v.literal("template"),

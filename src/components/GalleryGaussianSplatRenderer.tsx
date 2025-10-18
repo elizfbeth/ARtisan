@@ -5,10 +5,10 @@ import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 /**
- * WorldLabsGaussianSplatRenderer Component
+ * GalleryGaussianSplatRenderer Component
  * 
- * Renders World Labs 3D environments using Gaussian Splatting (SPZ format):
- * - Loads SPZ splat files from World Labs CDN
+ * Renders 3D environments using Gaussian Splatting (SPZ format):
+ * - Loads SPZ splat files
  * - Creates navigable 3D space
  * - Supports first-person WASD navigation
  * 
@@ -18,7 +18,7 @@ import * as THREE from "three";
  * - Or integrate with gsplat.js / luma-web libraries
  */
 
-interface WorldLabsGaussianSplatRendererProps {
+interface GalleryGaussianSplatRendererProps {
   spzUrl: string;
   colliderUrl?: string;
 }
@@ -27,10 +27,10 @@ interface WorldLabsGaussianSplatRendererProps {
  * Load and render Gaussian Splat as point cloud
  * This is a simplified approach - proper Gaussian Splat requires specialized shaders
  */
-export default function WorldLabsGaussianSplatRenderer({
+export default function GalleryGaussianSplatRenderer({
   spzUrl,
   colliderUrl,
-}: WorldLabsGaussianSplatRendererProps) {
+}: GalleryGaussianSplatRendererProps) {
   const { scene } = useThree();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export default function WorldLabsGaussianSplatRenderer({
     const loadSplat = async () => {
       try {
         setLoading(true);
-        console.log("Loading World Labs Gaussian Splat from:", spzUrl);
+        console.log("Loading Gaussian Splat from:", spzUrl);
         
         // For now, load the collision mesh for navigation
         // This provides a 3D structure to navigate through

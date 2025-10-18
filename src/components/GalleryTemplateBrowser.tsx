@@ -6,32 +6,31 @@ import {
   WorldTemplate,
   MOCK_WORLDS,
   worldToTemplate,
-} from "@/lib/worldlabs";
+} from "@/lib/gallery";
 
 /**
- * WorldLabsTemplateBrowser Component
+ * GalleryTemplateBrowser Component
  * 
- * Gallery browser for World Labs world templates:
+ * Gallery browser for world templates:
  * - Grid view of available worlds with thumbnails
  * - Search and filter by tags
  * - Click to select and use a world as environment
  * - Pagination support
  */
 
-interface WorldLabsTemplateBrowserProps {
+interface GalleryTemplateBrowserProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectWorld: (worldId: string) => void;
 }
 
-export default function WorldLabsTemplateBrowser({
+export default function GalleryTemplateBrowser({
   isOpen,
   onClose,
   onSelectWorld,
-}: WorldLabsTemplateBrowserProps) {
+}: GalleryTemplateBrowserProps) {
   const [templates, setTemplates] = useState<WorldTemplate[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
@@ -43,7 +42,6 @@ export default function WorldLabsTemplateBrowser({
 
     const loadTemplates = async () => {
       setLoading(true);
-      setError(null);
 
       try {
         // Try to fetch from API
@@ -54,12 +52,11 @@ export default function WorldLabsTemplateBrowser({
         });
         setTemplates(fetchedTemplates);
       } catch (err) {
-        console.error("Failed to load World Labs templates:", err);
+        console.error("Failed to load gallery templates:", err);
         
         // Fallback to mock data for development
-        console.log("Using mock World Labs data for development");
+        console.log("Using mock gallery data for development");
         setTemplates(MOCK_WORLDS.map(worldToTemplate));
-        setError("Using demo data (API connection pending)");
       } finally {
         setLoading(false);
       }
@@ -97,7 +94,7 @@ export default function WorldLabsTemplateBrowser({
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold">World Labs Gallery</h2>
+              <h2 className="text-2xl font-bold">gallARy</h2>
               <p className="text-sm opacity-90 mt-1">
                 Choose a world template or generate a new one
               </p>
@@ -145,12 +142,6 @@ export default function WorldLabsTemplateBrowser({
               ))}
             </div>
           </div>
-
-          {error && (
-            <div className="mt-3 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
-              {error}
-            </div>
-          )}
         </div>
 
         {/* Gallery Grid */}
@@ -230,11 +221,6 @@ export default function WorldLabsTemplateBrowser({
                         <span>{template.stats.view_count}</span>
                       </div>
                     </div>
-
-                    {/* Owner */}
-                    <p className="text-xs text-gray-400 mt-2">
-                      by {template.ownerName}
-                    </p>
                   </div>
                 </div>
               ))}
