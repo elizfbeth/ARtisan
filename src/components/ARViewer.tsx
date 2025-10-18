@@ -238,7 +238,7 @@ function LoadingFallback() {
 }
 
 /**
- * World Labs environment component
+ * World Labs environment component with navigation support
  */
 function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }) {
   const [panoramas, setPanoramas] = useState<Array<{
@@ -246,16 +246,60 @@ function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }
     position: [number, number, number];
     quaternion: [number, number, number, number];
   }> | null>(null);
+  const [worldData, setWorldData] = useState<{
+    generation_output: {
+      collider_mesh_url?: string;
+    };
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { scene } = useThree();
 
   useEffect(() => {
     const loadWorldLabs = async () => {
       try {
         setLoading(true);
-        const worldData = await fetchWorldDetails(worldLabsWorldId);
-        const panos = await getPanoramaUrls(worldData);
+        const data = await fetchWorldDetails(worldLabsWorldId);
+        setWorldData(data);
+        const panos = await getPanoramaUrls(data);
         setPanoramas(panos);
+        
+        // Load collision mesh for navigation
+        if (data.generation_output.collider_mesh_url) {
+          console.log("Loading World Labs collision mesh for navigation...");
+          const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+          const loader = new GLTFLoader();
+          
+          loader.load(
+            data.generation_output.collider_mesh_url,
+            (gltf) => {
+              console.log("Collision mesh loaded successfully");
+              
+              // Add collision mesh (invisible ground for navigation)
+              const collisionMesh = gltf.scene;
+              collisionMesh.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  // Create invisible ground plane for walking
+                  child.material = new THREE.MeshBasicMaterial({
+                    transparent: true,
+                    opacity: 0,
+                  });
+                  child.visible = true; // Keep visible for raycasting
+                  child.receiveShadow = false;
+                  child.castShadow = false;
+                }
+              });
+              
+              scene.add(collisionMesh);
+              console.log("Collision mesh added - navigation enabled");
+            },
+            undefined,
+            (err) => {
+              console.warn("Failed to load collision mesh (non-critical):", err);
+            }
+          );
+        }
+        
         setError(null);
       } catch (err) {
         console.error("Failed to load World Labs environment:", err);
@@ -266,7 +310,18 @@ function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }
     };
 
     loadWorldLabs();
-  }, [worldLabsWorldId]);
+
+    return () => {
+      // Cleanup collision mesh on unmount
+      const objectsToRemove: THREE.Object3D[] = [];
+      scene.traverse((object) => {
+        if (object.userData.isWorldLabsCollider) {
+          objectsToRemove.push(object);
+        }
+      });
+      objectsToRemove.forEach((obj) => scene.remove(obj));
+    };
+  }, [worldLabsWorldId, scene]);
 
   if (loading) {
     return (
@@ -287,7 +342,28 @@ function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }
     );
   }
 
-  return <WorldLabsPanoramaRenderer panoramas={panoramas} />;
+  return (
+    <>
+      {/* Panoramas for visual environment */}
+      <WorldLabsPanoramaRenderer panoramas={panoramas} />
+      
+      {/* Ground plane for navigation if no collision mesh */}
+      {!worldData?.generation_output.collider_mesh_url && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0, 0]}
+          receiveShadow
+        >
+          <planeGeometry args={[200, 200]} />
+          <meshStandardMaterial
+            transparent
+            opacity={0}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
+    </>
+  );
 }
 
 /**
