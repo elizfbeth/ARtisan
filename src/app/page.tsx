@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -10,7 +10,7 @@ import DoodlePad from "@/components/DoodlePad";
 
 /**
  * ARtisan Main Application Page
- * 
+ *
  * Orchestrates the complete AR creative studio experience:
  * 1. Photo upload → AR scene generation
  * 2. Doodle to Life → Object synthesis
@@ -19,29 +19,91 @@ import DoodlePad from "@/components/DoodlePad";
 
 type AppState = "upload" | "processing" | "viewing";
 
+interface SceneData {
+  _id?: string;
+  status?: string;
+  analysis?: {
+    environmentType?: string;
+    mood?: string;
+    keyObjects?: string[];
+  };
+  environmentTextureUrl?: string;
+  audioUrl?: string;
+  objects?: Array<{
+    id: string;
+    name: string;
+    modelUrl: string;
+    position: [number, number, number] | { x: number; y: number; z: number };
+    rotation: [number, number, number] | { x: number; y: number; z: number };
+    scale: [number, number, number] | { x: number; y: number; z: number };
+  }>;
+}
+
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("upload");
-  const [currentSceneId, setCurrentSceneId] = useState<Id<"scenes"> | null>(null);
+  const [currentSceneId, setCurrentSceneId] = useState<Id<"scenes"> | string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [fallbackSceneData, setFallbackSceneData] = useState<SceneData | null>(null);
 
-  // Subscribe to scene updates in real-time
-  const scene = useQuery(
+  // Check if the scene ID is a temporary ID (starts with "temp_")
+  const isTempSceneId = currentSceneId?.startsWith("temp_");
+
+  // Subscribe to scene updates in real-time (only if not a temp ID)
+  const convexScene = useQuery(
     api.scenes.getScene,
-    currentSceneId ? { sceneId: currentSceneId } : "skip"
+    currentSceneId && !isTempSceneId ? { sceneId: currentSceneId as Id<"scenes"> } : "skip"
   );
+
+  // Use Convex data if available, otherwise use fallback
+  const scene = (convexScene || fallbackSceneData) as SceneData | null | undefined;
+
+  // Poll for scene data when using a temp ID
+  // Note: Polling is now disabled since the upload endpoint waits for completion
+  // when using a temp ID. Keeping this code commented for reference.
+  /*
+  useEffect(() => {
+    if (!isTempSceneId || !currentSceneId || appState !== "processing") return;
+
+    let pollInterval: NodeJS.Timeout;
+    let attempts = 0;
+    const maxAttempts = 60;
+
+    const pollSceneData = async () => {
+      try {
+        attempts++;
+        const response = await fetch(`/api/upload?sceneId=${currentSceneId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.scene?.status === "ready") {
+            setFallbackSceneData(data.scene);
+            clearInterval(pollInterval);
+          }
+        }
+        if (attempts >= maxAttempts) clearInterval(pollInterval);
+      } catch (error) {
+        console.error("Polling error:", error);
+      }
+    };
+
+    pollInterval = setInterval(pollSceneData, 2000);
+    pollSceneData();
+
+    return () => clearInterval(pollInterval);
+  }, [isTempSceneId, currentSceneId, appState]);
+  */
 
   /**
    * Handle photo upload
    */
   const handlePhotoUpload = async (file: File) => {
     setIsUploading(true);
-    
+
     try {
       // Create form data
       const formData = new FormData();
       formData.append("photo", file);
-      
+
       // Upload to API
       const response = await fetch("/api/upload", {
         method: "POST",
@@ -53,11 +115,21 @@ export default function Home() {
       }
 
       const result = await response.json();
-      
+
+      console.log("Upload result:", result);
+
       // Set scene ID and transition to processing state
       setCurrentSceneId(result.sceneId);
+
+      // If the result includes scene data (for temp IDs), store it as fallback
+      if (result.scene) {
+        console.log("Scene data received:", result.scene);
+        console.log("Analysis data:", result.scene.analysis);
+        setFallbackSceneData(result.scene);
+      }
+
       setAppState("processing");
-      
+
     } catch (error) {
       console.error("Upload error:", error);
       alert("Failed to upload photo. Please try again.");
@@ -213,9 +285,9 @@ export default function Home() {
                       Scene Analysis:
                     </p>
                     <ul className="text-sm text-gray-600 space-y-1">
-                      <li>• Environment: {scene.analysis.environmentType}</li>
-                      <li>• Mood: {scene.analysis.mood}</li>
-                      <li>• Objects: {scene.analysis.keyObjects.join(", ")}</li>
+                      <li>• Environment: {scene.analysis.environmentType || "N/A"}</li>
+                      <li>• Mood: {scene.analysis.mood || "N/A"}</li>
+                      <li>• Objects: {scene.analysis.keyObjects?.join(", ") || "N/A"}</li>
                     </ul>
                   </div>
                 )}
@@ -229,14 +301,20 @@ export default function Home() {
             {/* AR Viewer */}
             <div className="rounded-lg overflow-hidden shadow-2xl">
               <ARViewer
-                environmentTextureUrl={scene.environmentTextureUrl}
-                objects={scene.objects.map((obj) => ({
+                environmentTextureUrl={scene.environmentTextureUrl || ""}
+                objects={(scene.objects || []).map((obj) => ({
                   id: obj.id,
                   name: obj.name,
                   modelUrl: obj.modelUrl,
-                  position: obj.position,
-                  rotation: obj.rotation,
-                  scale: obj.scale,
+                  position: Array.isArray(obj.position)
+                    ? { x: obj.position[0], y: obj.position[1], z: obj.position[2] }
+                    : obj.position as { x: number; y: number; z: number },
+                  rotation: Array.isArray(obj.rotation)
+                    ? { x: obj.rotation[0], y: obj.rotation[1], z: obj.rotation[2] }
+                    : obj.rotation as { x: number; y: number; z: number },
+                  scale: Array.isArray(obj.scale)
+                    ? { x: obj.scale[0], y: obj.scale[1], z: obj.scale[2] }
+                    : obj.scale as { x: number; y: number; z: number },
                 }))}
                 audioUrl={scene.audioUrl}
               />
@@ -274,7 +352,7 @@ export default function Home() {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Objects:</span>
                       <span className="font-semibold text-gray-800">
-                        {scene.objects.length}
+                        {scene.objects?.length || 0}
                       </span>
                     </div>
                   </div>
@@ -296,7 +374,7 @@ export default function Home() {
                 </div>
 
                 {/* Objects list */}
-                {scene.objects.length > 0 && (
+                {scene.objects && scene.objects.length > 0 && (
                   <div className="bg-white rounded-lg shadow-lg p-6">
                     <h3 className="text-lg font-bold text-gray-800 mb-4">
                       Created Objects

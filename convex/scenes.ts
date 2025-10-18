@@ -43,17 +43,44 @@ export const getScene = query({
 });
 
 /**
- * Update scene analysis results from Gemini
+ * Update scene analysis results from Gemini (enhanced with 25+ fields)
  */
 export const updateAnalysis = mutation({
   args: {
     sceneId: v.id("scenes"),
     analysis: v.object({
+      // Basic fields (always required)
       environmentType: v.string(),
       keyObjects: v.array(v.string()),
       depthPerspective: v.string(),
       colorPalette: v.array(v.string()),
       mood: v.string(),
+      // Landmark detection
+      isLandmark: v.optional(v.boolean()),
+      landmarkName: v.optional(v.union(v.string(), v.null())),
+      location: v.optional(v.union(v.string(), v.null())),
+      landmarkConfidence: v.optional(v.number()),
+      // Extended detailed analysis (optional, for enhanced workflow)
+      lightingConditions: v.optional(v.string()),
+      weatherConditions: v.optional(v.string()),
+      architecture: v.optional(v.string()),
+      vegetation: v.optional(v.string()),
+      surfaceMaterials: v.optional(v.string()),
+      signage: v.optional(v.string()),
+      people: v.optional(v.string()),
+      vehicles: v.optional(v.string()),
+      streetFurniture: v.optional(v.string()),
+      spatialLayout: v.optional(v.string()),
+      foregroundDetails: v.optional(v.string()),
+      midgroundDetails: v.optional(v.string()),
+      backgroundDetails: v.optional(v.string()),
+      uniqueFeatures: v.optional(v.string()),
+      textureDetails: v.optional(v.string()),
+      scaleIndicators: v.optional(v.string()),
+      shadowPatterns: v.optional(v.string()),
+      reflections: v.optional(v.string()),
+      materialAging: v.optional(v.string()),
+      culturalElements: v.optional(v.string()),
     }),
   },
   handler: async (ctx, args) => {

@@ -76,26 +76,76 @@ export async function executeSceneCreation(
 
 /**
  * Create an environment generation prompt from Gemini analysis
+ * Includes ALL detailed analysis for accurate scene replication
  */
-function createEnvironmentPrompt(analysis: {
-  environmentType: string;
-  keyObjects: string[];
-  depthPerspective: string;
-  colorPalette: string[];
-  mood: string;
-}): string {
-  const { environmentType, keyObjects, mood, colorPalette } = analysis;
+function createEnvironmentPrompt(analysis: Record<string, unknown>): string {
+  // Safely extract fields with fallbacks
+  const environmentType = (typeof analysis?.environmentType === "string" ? analysis.environmentType : null) || "generic environment";
+  const keyObjects = Array.isArray(analysis?.keyObjects) ? analysis.keyObjects : [];
+  const mood = (typeof analysis?.mood === "string" ? analysis.mood : null) || "atmospheric";
+  const colorPalette = Array.isArray(analysis?.colorPalette) ? analysis.colorPalette : [];
   
-  // Build a rich, descriptive prompt for environment generation
-  const objectsText = keyObjects.length > 0 
-    ? ` featuring ${keyObjects.slice(0, 3).join(", ")}` 
-    : "";
-    
-  const colorsText = colorPalette.length > 0 
-    ? ` with ${colorPalette.slice(0, 3).join(", ")} color tones` 
-    : "";
+  // Extract location and landmark info
+  const landmarkName = typeof analysis?.landmarkName === "string" ? analysis.landmarkName : null;
+  const location = typeof analysis?.location === "string" ? analysis.location : null;
+  const isLandmark = analysis?.isLandmark === true;
   
-  return `A ${mood} ${environmentType} scene${objectsText}${colorsText}. Immersive, photorealistic, wide angle view, atmospheric lighting, high detail, seamless panoramic perspective`;
+  // Extract detailed analysis fields
+  const architecture = typeof analysis?.architecture === "string" ? analysis.architecture : "";
+  const signage = typeof analysis?.signage === "string" ? analysis.signage : "";
+  const lightingConditions = typeof analysis?.lightingConditions === "string" ? analysis.lightingConditions : "";
+  const uniqueFeatures = typeof analysis?.uniqueFeatures === "string" ? analysis.uniqueFeatures : "";
+
+  // Build location text
+  let locationText = "";
+  if (isLandmark && landmarkName) {
+    locationText = ` of ${landmarkName}`;
+    if (location) {
+      locationText += ` in ${location}`;
+    }
+  } else if (location) {
+    locationText = ` in ${location}`;
+  }
+
+  // Build object and color text
+  const objectsText = keyObjects.length > 0
+    ? ` featuring ${keyObjects.join(", ")}`
+    : "";
+
+  const colorsText = colorPalette.length > 0
+    ? ` with ${colorPalette.join(", ")} color tones`
+    : "";
+
+  // Build comprehensive prompt with ALL details
+  const parts: string[] = [];
+  
+  // Base scene
+  parts.push(`A ${mood} ${environmentType} scene${locationText}${objectsText}${colorsText}. The image has to be point of view as a person on the ground. This image will be converted to a 360-degree panoramic view so make it seamless.`);
+  
+  // Architecture details
+  if (architecture) {
+    parts.push(`. Architecture: ${architecture}`);
+  }
+  
+  // Signage (critical for location identification)
+  if (signage) {
+    parts.push(`. Signage and text: ${signage}`);
+  }
+  
+  // Lighting
+  if (lightingConditions) {
+    parts.push(`. Lighting: ${lightingConditions}`);
+  }
+  
+  // Unique features
+  if (uniqueFeatures) {
+    parts.push(`. Distinctive features: ${uniqueFeatures}`);
+  }
+  
+  // Technical requirements - emphasize ground-level perspective
+  parts.push(`. Generate as 360-degree immersive equirectangular panorama from GROUND LEVEL perspective (eye-level at 1.5-2 meters height). The viewpoint must be from a person standing on the ground, NOT from above or aerial view. Photorealistic, atmospheric lighting, high detail, seamless horizontal 360-degree panorama`);
+
+  return parts.join("");
 }
 
 /**

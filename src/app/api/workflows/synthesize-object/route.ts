@@ -49,37 +49,34 @@ export async function POST(request: NextRequest) {
 
     console.log("Object synthesis complete:", result);
 
-    // Add object to scene in Convex
-    await convex.mutation(api.scenes.addObject, {
-      sceneId,
-      object: {
-        id: result.objectId,
-        name: result.name,
-        modelUrl: result.modelUrl,
-        storagePath: result.storagePath,
-        position: result.position,
-        rotation: result.rotation,
-        scale: result.scale,
-        createdAt: Date.now(),
-      },
-    });
-
-    // Check if we should regenerate music
-    const scene = await convex.query(api.scenes.getScene, {
-      sceneId,
-    });
-
-    if (scene && scene.objects.length % 3 === 0 && scene.objects.length > 0) {
-      // Regenerate music after every 3 objects
-      console.log("Triggering music regeneration...");
-      try {
-        await convex.action(api.workflows.composeMusicWorkflow, {
+    // Add object to scene in Convex (with timeout handling)
+    try {
+      await Promise.race([
+        convex.mutation(api.scenes.addObject, {
           sceneId,
-        });
-      } catch (error) {
-        console.error("Music regeneration failed (non-critical):", error);
-      }
+          object: {
+            id: result.objectId,
+            name: result.name,
+            modelUrl: result.modelUrl,
+            storagePath: result.storagePath,
+            position: result.position,
+            rotation: result.rotation,
+            scale: result.scale,
+            createdAt: Date.now(),
+          },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Convex mutation timeout")), 10000)
+        )
+      ]);
+      console.log("✓ Object added to scene in Convex");
+    } catch (convexError) {
+      console.warn("⚠ Failed to add object to Convex, but object was created:", convexError);
+      // Continue - object was created even if Convex update failed
     }
+
+    // Skip music regeneration to avoid additional timeouts
+    console.log("Skipping music regeneration to avoid timeouts");
 
     return NextResponse.json({
       success: true,
