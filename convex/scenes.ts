@@ -201,6 +201,28 @@ export const updateAudio = mutation({
 });
 
 /**
+ * Delete an object from the scene
+ */
+export const deleteObject = mutation({
+  args: {
+    sceneId: v.id("scenes"),
+    objectId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const scene = await ctx.db.get(args.sceneId);
+    if (!scene) {
+      throw new Error("Scene not found");
+    }
+    
+    const updatedObjects = scene.objects.filter((obj) => obj.id !== args.objectId);
+    await ctx.db.patch(args.sceneId, {
+      objects: updatedObjects,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
  * Update scene status (for workflow tracking)
  */
 export const updateStatus = mutation({
