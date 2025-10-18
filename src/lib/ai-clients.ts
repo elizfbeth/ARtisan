@@ -138,37 +138,247 @@ export async function generateEnvironmentWithFal(prompt: string): Promise<string
 }
 
 /**
- * Generate 3D model with fal.ai
+ * Enhance image for better 3D conversion with Gemini analysis
+ * Analyzes the image structure and generates an enhanced version with depth cues
  */
-export async function generate3DModelWithFal(prompt: string): Promise<string> {
+export async function enhanceImageForMeshyWithGemini(imageData: string): Promise<string> {
+  const model = getGeminiClient();
+  
+  // Remove data URL prefix if present
+  const base64Data = imageData.includes(",") ? imageData.split(",")[1] : imageData;
+  
+  console.log("Analyzing image with Gemini for 3D enhancement...");
+  
+  const analysisPrompt = `Analyze this image for 3D model conversion. Describe:
+1. Main object/subject
+2. Key structural features and shapes
+3. Depth and dimensionality cues
+4. Recommended enhancements for better 3D conversion
+
+Provide a detailed prompt for generating an enhanced version with better depth perception and 3D-ready features.`;
+
+  const result = await model.generateContent([
+    { text: analysisPrompt },
+    {
+      inlineData: {
+        mimeType: "image/png",
+        data: base64Data,
+      },
+    },
+  ]);
+
+  const response = await result.response;
+  const enhancementPrompt = response.text();
+  
+  console.log("Gemini enhancement prompt:", enhancementPrompt);
+  
+  // Generate enhanced image with FLUX
+  configureFal();
+  const fluxResult = await fal.subscribe("fal-ai/flux/dev", {
+    input: {
+      prompt: `${enhancementPrompt}. Clear depth perception, 3D-ready, high detail, professional lighting`,
+      image_size: "square",
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+    },
+    logs: true,
+  });
+  
+  const enhancedImageUrl = (fluxResult as { images: Array<{ url: string }> }).images[0].url;
+
+  // Return the public URL directly instead of base64
+  // Meshy API prefers public URLs over large base64 strings
+  console.log("Enhanced image URL:", enhancedImageUrl);
+  return enhancedImageUrl;
+}
+
+/**
+ * Generate 3D model with fal.ai Meshy v6 image-to-3d
+ * Returns a GLB model URL for true 3D geometry
+ * 
+ * @param prompt - Text description (for text-only workflow)
+ * @param imageData - Base64 image data (for image-to-3D workflow)
+ * @param enhanceWithGemini - Whether to enhance images with Gemini before 3D conversion
+ */
+export async function generate3DModelWithFal(
+  prompt?: string,
+  imageData?: string,
+  enhanceWithGemini: boolean = false
+): Promise<{
+  modelUrl: string;
+  modelType: "glb" | "image";
+}> {
   configureFal();
   
-  // Use fal.ai's 3D generation model
-  // Note: Check fal.ai documentation for the latest 3D model endpoints
+  // Determine input type and prepare image
+  let finalImageData: string | undefined = imageData;
+
+  // Helper function to convert base64 to public URL if needed
+  const ensurePublicUrl = async (data: string): Promise<string> => {
+    // If it's already a URL, return it
+    if (data.startsWith("http://") || data.startsWith("https://")) {
+      return data;
+    }
+
+    // If it's base64, we need to upload it to get a public URL
+    if (data.startsWith("data:image")) {
+      console.log("Converting base64 image to public URL for Meshy...");
+      const { uploadFile } = await import("./supabase");
+
+      // Extract base64 data and mime type
+      const matches = data.match(/^data:([^;]+);base64,(.+)$/);
+      if (!matches) {
+        throw new Error("Invalid base64 data format");
+      }
+
+      const mimeType = matches[1];
+      const base64Data = matches[2];
+
+      // Convert to buffer
+      const buffer = Buffer.from(base64Data, "base64");
+
+      // Upload to temporary path
+      const tempPath = `temp/meshy_input_${Date.now()}.png`;
+      const { url } = await uploadFile("MODELS", tempPath, buffer, mimeType);
+
+      console.log("Base64 image uploaded to public URL:", url);
+      return url;
+    }
+
+    return data;
+  };
+
+  // If text-only input, generate image first with FLUX
+  if (prompt && !imageData) {
+    console.log("Text-only input detected, generating image with FLUX first...");
+    try {
+      const fluxResult = await fal.subscribe("fal-ai/flux/dev", {
+        input: {
+          prompt: `${prompt}. High detail object, clear structure, good for 3D conversion, clean background`,
+          image_size: "square",
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
+        },
+        logs: true,
+      });
+      
+      const imageUrl = (fluxResult as { images: Array<{ url: string }> }).images[0].url;
+
+      // Use the public URL directly - Meshy prefers URLs over base64
+      finalImageData = imageUrl;
+
+      console.log("FLUX image generated successfully for text input:", imageUrl);
+    } catch (fluxError) {
+      console.error("Failed to generate image from text:", fluxError);
+      throw new Error("Failed to generate image from text description");
+    }
+  }
+  
+  // Enhance image with Gemini if requested
+  if (finalImageData && enhanceWithGemini) {
+    try {
+      finalImageData = await enhanceImageForMeshyWithGemini(finalImageData);
+      console.log("Image enhanced with Gemini successfully");
+    } catch (enhanceError) {
+      console.warn("Gemini enhancement failed, using original image:", enhanceError);
+      // Continue with original image
+    }
+  }
+  
+  // Try Meshy v6 image-to-3d
+  if (finalImageData) {
+    try {
+      console.log("Attempting 3D model generation with Meshy v6 image-to-3d...");
+
+      // Ensure we have a public URL (not base64)
+      const publicImageUrl = await ensurePublicUrl(finalImageData);
+      console.log("Using image URL for Meshy:", publicImageUrl);
+
+      // Use fal.subscribe to properly wait for the long-running 3D generation
+      console.log("Submitting to Meshy queue (this may take 30-60 seconds)...");
+      const data = await fal.subscribe("fal-ai/meshy/v6-preview/image-to-3d", {
+        input: {
+          image_url: publicImageUrl,
+        },
+        logs: true,
+        onQueueUpdate: (update) => {
+          if (update.status === "IN_PROGRESS") {
+            console.log("Meshy progress:", update.logs?.map(log => log.message).join("\n"));
+          }
+        },
+      }) as unknown;
+
+      console.log("Meshy API response:", JSON.stringify(data, null, 2));
+      
+      // Try multiple possible response structures
+      let modelUrl: string | undefined;
+      
+      // Check data.model_glb.url first
+      if ((data as { model_glb?: { url?: string } }).model_glb?.url) {
+        modelUrl = (data as { model_glb: { url: string } }).model_glb.url;
+      }
+      // Alternative: data.model_urls.glb.url
+      else if ((data as { model_urls?: { glb?: { url?: string } } }).model_urls?.glb?.url) {
+        modelUrl = (data as { model_urls: { glb: { url: string } } }).model_urls.glb.url;
+      }
+      // Legacy formats
+      else if ((data as { model_url?: { url?: string } }).model_url?.url) {
+        modelUrl = (data as { model_url: { url: string } }).model_url.url;
+      }
+      else if ((data as { glb_url?: string }).glb_url) {
+        modelUrl = (data as { glb_url: string }).glb_url;
+      }
+      
+      if (modelUrl && modelUrl.endsWith(".glb")) {
+        console.log("✅ 3D GLB model generated successfully:", modelUrl);
+        return {
+          modelUrl,
+          modelType: "glb",
+        };
+      } else {
+        const responseKeys = Object.keys(data as object).join(", ");
+        throw new Error(`Meshy response does not contain a valid GLB URL. Available keys: ${responseKeys}`);
+      }
+    } catch (meshyError) {
+      console.error("Meshy 3D generation failed:", meshyError);
+
+      // Log detailed error information
+      if (meshyError && typeof meshyError === 'object') {
+        const error = meshyError as { status?: number; body?: unknown; message?: string };
+        console.error("Meshy error details:", {
+          status: error.status,
+          body: JSON.stringify(error.body, null, 2),
+          message: error.message,
+        });
+      }
+
+      console.log("Falling back to 2D image generation...");
+    }
+  }
+  
+  // Fallback to 2D image generation
   try {
-    const result = await fal.subscribe("fal-ai/stable-diffusion-v35-large", {
-      input: {
-        prompt: `3D model render: ${prompt}. Clean background, centered, high quality`,
-        image_size: "square",
-        num_inference_steps: 28,
-      },
-      logs: true,
-    });
-    
-    return (result as { images: Array<{ url: string }> }).images[0].url;
-  } catch (error) {
-    console.error("3D generation error, falling back to 2D:", error);
-    // Fallback to 2D image generation
+    const fallbackPrompt = prompt || "3D object";
     const result = await fal.subscribe("fal-ai/flux/dev", {
       input: {
-        prompt: `${prompt}. Isometric view, clean white background, 3D render style`,
+        prompt: `${fallbackPrompt}. Isometric 3D render, clean white background, professional studio lighting, high detail`,
         image_size: "square",
         num_inference_steps: 28,
+        guidance_scale: 3.5,
       },
       logs: true,
     });
     
-    return (result as { images: Array<{ url: string }> }).images[0].url;
+    const imageUrl = (result as { images: Array<{ url: string }> }).images[0].url;
+    console.log("Fallback 2D image generated successfully:", imageUrl);
+    
+    return {
+      modelUrl: imageUrl,
+      modelType: "image",
+    };
+  } catch (fluxError) {
+    console.error("Both 3D and 2D generation failed:", fluxError);
+    throw new Error("Failed to generate 3D model or 2D fallback");
   }
 }
 
@@ -326,7 +536,7 @@ export async function generateAudioWithElevenLabs(prompt: string): Promise<Array
   // Based on ElevenLabs API v1 specification
   const requestBody = {
     text: truncatedPrompt,
-    duration_seconds: 22, // ElevenLabs supports durations between 0.5 and 22 seconds
+    duration_seconds: null, // Let ElevenLabs determine optimal duration (0.5-22s)
     prompt_influence: 0.3, // Range: 0.0 to 1.0 (lower = more realistic, higher = more creative)
   };
   
@@ -356,18 +566,31 @@ export async function generateAudioWithElevenLabs(prompt: string): Promise<Array
       requestBody,
     });
     
+    // Parse error details if available
+    let errorDetails = "";
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorDetails = errorJson.detail?.message || errorJson.message || "";
+    } catch {
+      errorDetails = errorText;
+    }
+
     // Provide helpful error message based on status code
     let errorMessage = `ElevenLabs API error: ${response.status} ${response.statusText}`;
     if (response.status === 400) {
-      errorMessage += " - Check if your API key has access to the Sound Generation endpoint and verify the request parameters.";
+      errorMessage += " - Invalid request parameters. Details: " + errorDetails;
     } else if (response.status === 401) {
       errorMessage += " - Invalid API key. Please check your ELEVENLABS_API_KEY environment variable.";
+    } else if (response.status === 403) {
+      errorMessage += " - Access forbidden. Your API key may not have access to the Sound Generation endpoint. This feature requires a paid ElevenLabs plan.";
     } else if (response.status === 404) {
-      errorMessage += " - The sound-generation endpoint may not be available. Check ElevenLabs API documentation for the correct endpoint.";
+      errorMessage += " - Endpoint not found. The sound-generation endpoint may not be available for your account.";
     } else if (response.status === 429) {
       errorMessage += " - Rate limit exceeded. Please try again later.";
+    } else if (errorDetails) {
+      errorMessage += " - " + errorDetails;
     }
-    
+
     throw new Error(errorMessage);
   }
 

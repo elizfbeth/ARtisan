@@ -27,6 +27,7 @@ export interface ObjectSynthesisResult {
   name: string;
   description: string;
   modelUrl: string;
+  modelType: "glb" | "image";
   storagePath: string;
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
@@ -42,26 +43,64 @@ export async function executeObjectSynthesis(
   console.log("Starting object synthesis workflow for scene:", input.sceneId);
   console.log("Input type:", input.inputType);
   
-  // Step 1: Generate detailed description with Gemini
-  console.log("Step 1: Generating description with Gemini...");
-  const description = await describeObjectWithGemini(
-    input.inputType,
-    input.inputData
-  );
-  console.log("Description generated:", description);
+  let description: string;
+  let generatedModelUrl: string;
+  let modelType: "glb" | "image";
   
-  // Step 2: Generate 3D model/image with fal.ai
-  console.log("Step 2: Generating 3D representation with fal.ai...");
-  const generatedImageUrl = await generate3DModelWithFal(description);
-  console.log("Model generated:", generatedImageUrl);
+  // Step 1 & 2: Process based on input type
+  if (input.inputType === "text") {
+    // TEXT WORKFLOW: Gemini description → FLUX image → Meshy 3D
+    console.log("Step 1: Generating detailed description with Gemini...");
+    description = await describeObjectWithGemini(
+      input.inputType,
+      input.inputData
+    );
+    console.log("Description generated:", description);
+    
+    console.log("Step 2: Generating 3D model from text description...");
+    console.log("Note: This will generate an image first, then convert to 3D (30-60 seconds)...");
+    const result = await generate3DModelWithFal(description, undefined, false);
+    generatedModelUrl = result.modelUrl;
+    modelType = result.modelType;
+    
+  } else {
+    // IMAGE WORKFLOW (sketch/photo): Base64 image → Gemini enhancement → Meshy 3D
+    console.log("Step 1: Processing image input for 3D conversion...");
+    
+    // Generate description for naming purposes
+    description = await describeObjectWithGemini(
+      input.inputType,
+      input.inputData
+    );
+    console.log("Description generated for naming:", description.substring(0, 100) + "...");
+    
+    console.log("Step 2: Generating 3D model from image with Gemini enhancement...");
+    console.log("Note: 3D model generation may take 30-60 seconds...");
+    
+    // Pass base64 image directly to Meshy with Gemini enhancement enabled
+    const result = await generate3DModelWithFal(
+      undefined,
+      input.inputData,
+      true // Enable Gemini enhancement for better 3D conversion
+    );
+    generatedModelUrl = result.modelUrl;
+    modelType = result.modelType;
+  }
+  
+  console.log("Model generated:", { url: generatedModelUrl, type: modelType });
   
   // Step 3: Upload to Supabase storage
   console.log("Step 3: Uploading to Supabase...");
   const objectId = generateObjectId();
-  const storagePath = `scenes/${input.sceneId}/objects/${objectId}.png`;
+  
+  // Use appropriate file extension and content type based on model type
+  const fileExtension = modelType === "glb" ? ".glb" : ".png";
+  const contentType = modelType === "glb" ? "model/gltf-binary" : "image/png";
+  const storagePath = `scenes/${input.sceneId}/objects/${objectId}${fileExtension}`;
+  
   const { url: modelUrl, path: finalStoragePath } = 
-    await uploadFromUrl("MODELS", storagePath, generatedImageUrl, "image/png");
-  console.log("Upload complete:", modelUrl);
+    await uploadFromUrl("MODELS", storagePath, generatedModelUrl, contentType);
+  console.log("Upload complete:", { url: modelUrl, type: modelType });
   
   // Generate a name if not provided
   const objectName = input.inputName || generateObjectName(description);
@@ -76,6 +115,7 @@ export async function executeObjectSynthesis(
     name: objectName,
     description,
     modelUrl,
+    modelType,
     storagePath: finalStoragePath,
     position,
     rotation,

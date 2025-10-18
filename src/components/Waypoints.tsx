@@ -190,3 +190,7 @@ export function Minimap({ waypoints, playerPosition }: MinimapProps) {
   );
 }
 
+
+
+
+

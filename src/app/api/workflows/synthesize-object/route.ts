@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
         id: result.objectId,
         name: result.name,
         modelUrl: result.modelUrl,
+        modelType: result.modelType,
         storagePath: result.storagePath,
         position: result.position,
         rotation: result.rotation,

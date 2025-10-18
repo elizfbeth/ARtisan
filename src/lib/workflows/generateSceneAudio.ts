@@ -54,26 +54,34 @@ export async function executeSceneAudioGeneration(
   
   // Step 2: Generate realistic ambient audio with ElevenLabs
   console.log("Step 2: Generating audio with ElevenLabs...");
-  const audioBuffer = await generateAudioWithElevenLabs(audioPrompt);
-  console.log("Audio generated, size:", audioBuffer.byteLength, "bytes");
-  
-  // Step 3: Upload to Supabase storage
-  console.log("Step 3: Uploading to Supabase...");
-  const storagePath = `scenes/${input.sceneId}/audio_${Date.now()}.mp3`;
-  const { url: audioUrl, path: audioStoragePath } = await uploadFile(
-    "AUDIO",
-    storagePath,
-    Buffer.from(audioBuffer),
-    "audio/mpeg"
-  );
-  console.log("Upload complete:", audioUrl);
-  
-  return {
-    audioUrl,
-    audioStoragePath,
-    audioMood: input.mood,
-    audioPrompt,
-  };
+  try {
+    const audioBuffer = await generateAudioWithElevenLabs(audioPrompt);
+    console.log("Audio generated, size:", audioBuffer.byteLength, "bytes");
+
+    // Step 3: Upload to Supabase storage
+    console.log("Step 3: Uploading to Supabase...");
+    const storagePath = `scenes/${input.sceneId}/audio_${Date.now()}.mp3`;
+    const { url: audioUrl, path: audioStoragePath } = await uploadFile(
+      "AUDIO",
+      storagePath,
+      Buffer.from(audioBuffer),
+      "audio/mpeg"
+    );
+    console.log("Upload complete:", audioUrl);
+
+    return {
+      audioUrl,
+      audioStoragePath,
+      audioMood: input.mood,
+      audioPrompt,
+    };
+  } catch (error) {
+    console.warn("Scene audio generation failed (non-critical):", error);
+
+    // Return a result indicating audio generation is not available
+    // This allows the app to continue without audio
+    throw error; // Re-throw so the error is handled by the API route
+  }
 }
 
 /**

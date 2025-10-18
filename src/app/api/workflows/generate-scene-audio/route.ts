@@ -53,28 +53,42 @@ export async function POST(request: NextRequest) {
     }
 
     // Execute the scene audio generation workflow
-    const result = await executeSceneAudioGeneration({
-      sceneId,
-      environmentType: finalEnvironmentType,
-      mood: finalMood,
-      objectCount: finalObjectCount,
-      objects: finalObjects,
-    });
+    try {
+      const result = await executeSceneAudioGeneration({
+        sceneId,
+        environmentType: finalEnvironmentType,
+        mood: finalMood,
+        objectCount: finalObjectCount,
+        objects: finalObjects,
+      });
 
-    console.log("Scene audio generation complete:", result);
+      console.log("Scene audio generation complete:", result);
 
-    // Update scene audio in Convex
-    await convex.mutation(api.scenes.updateAudio, {
-      sceneId,
-      audioUrl: result.audioUrl,
-      audioStoragePath: result.audioStoragePath,
-      audioMood: result.audioMood,
-    });
+      // Update scene audio in Convex
+      await convex.mutation(api.scenes.updateAudio, {
+        sceneId,
+        audioUrl: result.audioUrl,
+        audioStoragePath: result.audioStoragePath,
+        audioMood: result.audioMood,
+      });
 
-    return NextResponse.json({
-      success: true,
-      result,
-    });
+      return NextResponse.json({
+        success: true,
+        result,
+      });
+    } catch (audioError) {
+      // Audio generation failed - return a friendly error but don't crash
+      console.error("Scene audio generation workflow error:", audioError);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: audioError instanceof Error ? audioError.message : "Audio generation failed",
+          message: "Scene audio generation is currently unavailable. Please check your ElevenLabs API key and ensure it has access to the Sound Generation endpoint.",
+        },
+        { status: 200 } // Return 200 to indicate the request was handled, even if audio failed
+      );
+    }
   } catch (error) {
     console.error("Scene audio generation workflow error:", error);
 

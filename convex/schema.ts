@@ -80,6 +80,7 @@ export default defineSchema({
       id: v.string(),
       name: v.string(),
       modelUrl: v.string(),
+      modelType: v.optional(v.union(v.literal("glb"), v.literal("image"))), // Track model type
       storagePath: v.string(),
       position: v.object({ x: v.number(), y: v.number(), z: v.number() }),
       rotation: v.object({ x: v.number(), y: v.number(), z: v.number() }),
