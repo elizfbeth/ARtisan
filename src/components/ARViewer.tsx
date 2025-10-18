@@ -64,21 +64,43 @@ function EnvironmentSphere({ textureUrl }: { textureUrl: string }) {
 function SceneObject3D({ 
   object, 
   onDelete, 
-  onMove
+  onMove,
+  onDragStart,
+  onDragEnd,
 }: { 
   object: SceneObject; 
   onDelete?: (objectId: string) => void;
   onMove?: (objectId: string, position: { x: number; y: number; z: number }) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const justFinishedDraggingRef = useRef(false);
+  const { camera, raycaster } = useThree();
   const [hovered, setHovered] = useState(false);
-  const [showDeleteButton, setShowDeleteButton] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0, position: { x: 0, y: 0, z: 0 } });
-  
+  const [dragStart, setDragStart] = useState({ 
+    x: 0, 
+    y: 0, 
+    position: { x: 0, y: 0, z: 0 },
+    worldPosition: new THREE.Vector3()
+  });
+  const [localPosition, setLocalPosition] = useState(object.position);
   // Load texture (for now we're using images as textures on planes)
   // In production, this would load actual .glb models
   const texture = useTexture(object.modelUrl);
+
+  useEffect(() => {
+    // Only update local position if we're not currently dragging
+    // This prevents the object from snapping back to the old position while dragging
+    if (!isDragging && !justFinishedDraggingRef.current) {
+      setLocalPosition(object.position);
+      // Also update the mesh position to match
+      if (meshRef.current) {
+        meshRef.current.position.set(object.position.x, object.position.y, object.position.z);
+      }
+    }
+  }, [object.position, isDragging]);
 
   useEffect(() => {
     document.body.style.cursor = hovered ? (isDragging ? "grabbing" : "grab") : "auto";
@@ -93,26 +115,84 @@ function SceneObject3D({
 
   const handlePointerDown = (event: any) => {
     if (event.button !== 0) return;
-    setIsDragging(true);
-    setDragStart({ x: event.clientX, y: event.clientY, position: {...object.position }});
     event.stopPropagation();
+
+    // Get the world position of the object
+    const worldPosition = new THREE.Vector3();
+    meshRef.current?.getWorldPosition(worldPosition);
+
+    setIsDragging(true);
+    setDragStart({ 
+      x: event.clientX, 
+      y: event.clientY, 
+      position: {...object.position},
+      worldPosition: worldPosition.clone()
+    });
+    
+    if (onDragStart) {
+      onDragStart();
+    }
   };
 
   const handlePointerMove = (event: any) => {
-    if (!isDragging || !onMove) return;
-
-    const deltaX = (event.clientX - dragStart.x)*0.01;
-    const deltaY = (event.clientY - dragStart.y)*0.01;
-    const newPosition = {
-      x: dragStart.position.x + deltaX,
-      y: dragStart.position.y + deltaY,
-      z: dragStart.position.z,
-    };
-    onMove(object.id, newPosition);
+    if (!isDragging || !meshRef.current) return;
+    
+    // Create a raycaster from the camera through the mouse position
+    const mouse = new THREE.Vector2();
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, camera);
+    
+    // Create a plane at the object's Z position for dragging
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -dragStart.worldPosition.z);
+    const intersectionPoint = new THREE.Vector3();
+    
+    raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
+    
+    if (intersectionPoint) {
+      // Calculate the offset from the initial click point
+      const offset = intersectionPoint.clone().sub(dragStart.worldPosition);
+      const newPosition = {
+        x: dragStart.position.x + offset.x,
+        y: dragStart.position.y + offset.y,
+        z: dragStart.position.z
+      };
+      
+      setLocalPosition(newPosition);
+      meshRef.current.position.set(newPosition.x, newPosition.y, newPosition.z);
+    }
   };
 
   const handlePointerUp = () => {
+    if (!isDragging) return;
+
     setIsDragging(false);
+    justFinishedDraggingRef.current = true;
+    
+    // Get the current position from the mesh for accurate final position
+    const finalPosition = meshRef.current ? {
+      x: meshRef.current.position.x,
+      y: meshRef.current.position.y,
+      z: meshRef.current.position.z
+    } : localPosition;
+    
+    // Update local position to match final position
+    setLocalPosition(finalPosition);
+    
+    // Call the database update with the final position
+    if (onMove) {
+      onMove(object.id, finalPosition);
+    }
+    
+    if (onDragEnd) {
+      onDragEnd();
+    }
+    
+    // Reset the flag after a short delay to allow the database update to complete
+    setTimeout(() => {
+      justFinishedDraggingRef.current = false;
+    }, 100);
   };
 
   useEffect(() => {
@@ -133,26 +213,26 @@ function SceneObject3D({
         document.removeEventListener('pointerup', handleGlobalPointerUp);
       };
     }
-  }, [isDragging, dragStart]);
+  }, [isDragging, dragStart, camera, raycaster]);
 
   return (
     <mesh
       ref={meshRef}
-      position={[object.position.x, object.position.y, object.position.z]}
+      position={[localPosition.x, localPosition.y, localPosition.z]}
       rotation={[object.rotation.x, object.rotation.y, object.rotation.z]}
       scale={[object.scale.x, object.scale.y, object.scale.z]}
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
       onPointerDown={handlePointerDown}
     >
-      {/* Using a plane with texture for now, replace with GLTFLoader for actual models */}
-      <planeGeometry args={[2, 2]} />
+      {/* Use a proper 3D box instead of a plane for better 3D interaction */}
+      <boxGeometry args={[1.5, 1.5, 0.1]} />
       <meshStandardMaterial 
         map={texture} 
         transparent 
         side={THREE.DoubleSide}
-        emissive={hovered ? "#222222" : "#000000"}
-        opacity={isDragging ? 0.8 : 1}
+        emissive={hovered ? "#333333" : "#000000"}
+        opacity={isDragging ? 0.8 : 1.0}
       />
       
       {/* Label and Delete Button */}
@@ -163,8 +243,8 @@ function SceneObject3D({
             {onDelete && (
               <button
                 onClick={handleDelete}
-                onMouseEnter={() => setShowDeleteButton(true)}
-                onMouseLeave={() => setShowDeleteButton(false)}
+                //onMouseEnter={() => setShowDeleteButton(true)}
+                //onMouseLeave={() => setShowDeleteButton(false)}
                 className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs transition-colors"
                 title="Delete object"
               >
@@ -270,6 +350,22 @@ function ARScene({
   onObjectDelete?: (objectId: string) => void;
   onObjectMove?: (objectId: string, position: { x: number; y: number; z: number }) => void;
 }) {
+  const [isAnyObjectDragging, setIsAnyObjectDragging] = useState(false);
+
+  const handleObjectMove = (objectId: string, position: { x: number; y: number; z: number }) => {
+    if (onObjectMove) {
+      onObjectMove(objectId, position);
+    }
+  };
+
+  const handleDragStart = () => {
+    setIsAnyObjectDragging(true);
+  };
+
+  const handleDragEnd = () => {
+    setIsAnyObjectDragging(false);
+  };
+
   return (
     <>
       {/* Lighting */}
@@ -295,7 +391,13 @@ function ARScene({
       {/* Scene objects */}
       {objects.map((obj) => (
         <Suspense key={obj.id} fallback={<LoadingFallback />}>
-          <SceneObject3D object={obj} onDelete={onObjectDelete} onMove={onObjectMove} />
+          <SceneObject3D 
+            object={obj} 
+            onDelete={onObjectDelete} 
+            onMove={handleObjectMove} 
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          />
         </Suspense>
       ))}
 
@@ -305,6 +407,7 @@ function ARScene({
         dampingFactor={0.05}
         minDistance={1}
         maxDistance={100}
+        enabled={!isAnyObjectDragging} //disable when dragging an object
       />
       <CameraController />
     </>
@@ -376,7 +479,7 @@ export default function ARViewer({
         <p className="font-semibold mb-1">Controls:</p>
         <p className="text-sm">WASD - Move | Mouse - Look | E/Q - Up/Down</p>
         <p className="text-sm mt-1">Hover over objects to delete them</p>
-        <p className="text-sm mt-1">Click and drag to move objects</p>
+        <p className="text-sm mt-1">Drag to move objects</p>
       </div>
 
       {/* 3D Canvas */}
