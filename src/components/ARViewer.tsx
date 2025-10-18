@@ -59,26 +59,30 @@ function EnvironmentSphere({ textureUrl }: { textureUrl: string }) {
 }
 
 /**
- * Scene object component - renders individual 3D objects
+ * Scene object component - renders individual 3D objects with drag and delete functionality
  */
 function SceneObject3D({ 
   object, 
-  onDelete 
+  onDelete, 
+  onMove
 }: { 
   object: SceneObject; 
   onDelete?: (objectId: string) => void;
+  onMove?: (objectId: string, position: { x: number; y: number; z: number }) => void;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
   const [showDeleteButton, setShowDeleteButton] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0, position: { x: 0, y: 0, z: 0 } });
   
   // Load texture (for now we're using images as textures on planes)
   // In production, this would load actual .glb models
   const texture = useTexture(object.modelUrl);
 
   useEffect(() => {
-    document.body.style.cursor = hovered ? "pointer" : "auto";
-  }, [hovered]);
+    document.body.style.cursor = hovered ? (isDragging ? "grabbing" : "grab") : "auto";
+  }, [hovered, isDragging]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -86,6 +90,50 @@ function SceneObject3D({
       onDelete(object.id);
     }
   };
+
+  const handlePointerDown = (event: any) => {
+    if (event.button !== 0) return;
+    setIsDragging(true);
+    setDragStart({ x: event.clientX, y: event.clientY, position: {...object.position }});
+    event.stopPropagation();
+  };
+
+  const handlePointerMove = (event: any) => {
+    if (!isDragging || !onMove) return;
+
+    const deltaX = (event.clientX - dragStart.x)*0.01;
+    const deltaY = (event.clientY - dragStart.y)*0.01;
+    const newPosition = {
+      x: dragStart.position.x + deltaX,
+      y: dragStart.position.y + deltaY,
+      z: dragStart.position.z,
+    };
+    onMove(object.id, newPosition);
+  };
+
+  const handlePointerUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      const handleGlobalPointerMove = (event: PointerEvent) => {
+        handlePointerMove(event);
+      };
+      
+      const handleGlobalPointerUp = () => {
+        handlePointerUp();
+      };
+
+      document.addEventListener('pointermove', handleGlobalPointerMove);
+      document.addEventListener('pointerup', handleGlobalPointerUp);
+
+      return () => {
+        document.removeEventListener('pointermove', handleGlobalPointerMove);
+        document.removeEventListener('pointerup', handleGlobalPointerUp);
+      };
+    }
+  }, [isDragging, dragStart]);
 
   return (
     <mesh
@@ -95,6 +143,7 @@ function SceneObject3D({
       scale={[object.scale.x, object.scale.y, object.scale.z]}
       onPointerOver={() => setHovered(true)}
       onPointerOut={() => setHovered(false)}
+      onPointerDown={handlePointerDown}
     >
       {/* Using a plane with texture for now, replace with GLTFLoader for actual models */}
       <planeGeometry args={[2, 2]} />
@@ -103,6 +152,7 @@ function SceneObject3D({
         transparent 
         side={THREE.DoubleSide}
         emissive={hovered ? "#222222" : "#000000"}
+        opacity={isDragging ? 0.8 : 1}
       />
       
       {/* Label and Delete Button */}
@@ -121,6 +171,9 @@ function SceneObject3D({
                 🗑️
               </button>
             )}
+          </div>
+          <div className = "text-xs text-gray-500 mt-1 text-center">
+            {isDragging ? "Dragging..." : "Drag to move"}
           </div>
         </Html>
       )}
@@ -210,10 +263,12 @@ function ARScene({
   environmentTextureUrl,
   objects,
   onObjectDelete,
+  onObjectMove,
 }: {
   environmentTextureUrl?: string;
   objects: SceneObject[];
   onObjectDelete?: (objectId: string) => void;
+  onObjectMove?: (objectId: string, position: { x: number; y: number; z: number }) => void;
 }) {
   return (
     <>
@@ -240,7 +295,7 @@ function ARScene({
       {/* Scene objects */}
       {objects.map((obj) => (
         <Suspense key={obj.id} fallback={<LoadingFallback />}>
-          <SceneObject3D object={obj} onDelete={onObjectDelete} />
+          <SceneObject3D object={obj} onDelete={onObjectDelete} onMove={onObjectMove} />
         </Suspense>
       ))}
 
@@ -321,6 +376,7 @@ export default function ARViewer({
         <p className="font-semibold mb-1">Controls:</p>
         <p className="text-sm">WASD - Move | Mouse - Look | E/Q - Up/Down</p>
         <p className="text-sm mt-1">Hover over objects to delete them</p>
+        <p className="text-sm mt-1">Click and drag to move objects</p>
       </div>
 
       {/* 3D Canvas */}
@@ -333,6 +389,7 @@ export default function ARViewer({
             environmentTextureUrl={environmentTextureUrl}
             objects={objects}
             onObjectDelete={onObjectDelete}
+            onObjectMove={onObjectMove}
           />
         </Suspense>
       </Canvas>

@@ -141,6 +141,19 @@ export default function Home() {
   };
 
   /**
+   * Handle moving an object in the scene
+   */
+  const handleMoveObject = useMutation(api.scenes.updateObject);
+  const moveObject = async (objectId: string, position: { x: number; y: number; z: number }) => {
+    if (!currentSceneId) return;
+    
+    try {
+      await handleMoveObject({ sceneId: currentSceneId, objectId, position });
+    } catch (error) {
+      console.error("Move object error:", error);
+    }
+  };
+  /**
    * Handle returning to upload
    */
   const handleNewScene = () => {
@@ -259,6 +272,7 @@ export default function Home() {
                 }))}
                 audioUrl={scene.audioUrl}
                 onObjectDelete={deleteObject}
+                onObjectMove={moveObject}
               />
             </div>
 
