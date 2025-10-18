@@ -91,6 +91,35 @@ function EnvironmentSphere({ textureUrl }: { textureUrl: string }) {
 }
 
 /**
+ * PointerLockControls wrapper with state tracking
+ */
+function TrackedPointerLockControls({
+  onLock,
+  onUnlock,
+}: {
+  onLock?: () => void;
+  onUnlock?: () => void;
+}) {
+  useEffect(() => {
+    const handlePointerLockChange = () => {
+      if (document.pointerLockElement) {
+        if (onLock) onLock();
+      } else {
+        if (onUnlock) onUnlock();
+      }
+    };
+
+    document.addEventListener("pointerlockchange", handlePointerLockChange);
+
+    return () => {
+      document.removeEventListener("pointerlockchange", handlePointerLockChange);
+    };
+  }, [onLock, onUnlock]);
+
+  return <PointerLockControls />;
+}
+
+/**
  * Enhanced First-person navigation controller with WASD + mouse look
  */
 function FirstPersonController({
@@ -389,6 +418,7 @@ export default function ARViewer({
   const [enablePhysics, setEnablePhysics] = useState(false);
   const [isAudioPlaying] = useState(false);
   const [playerPosition, setPlayerPosition] = useState({ x: 0, z: 0 });
+  const [isPointerLocked, setIsPointerLocked] = useState(false);
 
   /**
    * Deselect object when clicking empty space
@@ -406,14 +436,16 @@ export default function ARViewer({
 
   return (
     <div className="relative w-full h-screen">
-      {/* Click to start prompt */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
-        <div className="bg-black bg-opacity-75 text-white px-6 py-4 rounded-lg text-center">
-          <p className="text-lg font-semibold">Click to Enter 3D World</p>
-          <p className="text-sm mt-2">WASD - Move | Mouse - Look Around | Shift - Sprint</p>
-          <p className="text-xs mt-1 opacity-75">Press ESC to exit | Tab to switch camera</p>
+      {/* Click to start prompt - only show when not in pointer lock */}
+      {!isPointerLocked && cameraMode === "first-person" && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+          <div className="bg-black bg-opacity-75 text-white px-6 py-4 rounded-lg text-center">
+            <p className="text-lg font-semibold">Click to Enter 3D World</p>
+            <p className="text-sm mt-2">WASD - Move | Mouse - Look Around | Shift - Sprint</p>
+            <p className="text-xs mt-1 opacity-75">Press ESC to exit | Tab to switch camera</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Controls hint */}
       <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-4 py-2 rounded">
@@ -473,7 +505,10 @@ export default function ARViewer({
         {/* First Person Controls */}
         {cameraMode === "first-person" && (
           <>
-            <PointerLockControls />
+            <TrackedPointerLockControls
+              onLock={() => setIsPointerLocked(true)}
+              onUnlock={() => setIsPointerLocked(false)}
+            />
             <FirstPersonController
               enabled={cameraMode === "first-person"}
               onPositionChange={setPlayerPosition}
