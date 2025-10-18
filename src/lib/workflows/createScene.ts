@@ -40,28 +40,32 @@ export async function executeSceneCreation(
   input: SceneCreationInput
 ): Promise<SceneCreationResult> {
   console.log("Starting scene creation workflow for scene:", input.sceneId);
-  
+  console.log("Photo URL:", input.photoUrl);
+
+  // Give Supabase a moment to make the file available
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
   // Step 1: Analyze the photo with Gemini
   console.log("Step 1: Analyzing photo with Gemini...");
   const analysis = await analyzeImageWithGemini(input.photoUrl);
   console.log("Analysis complete:", analysis);
-  
+
   // Step 2: Generate environment prompt based on analysis
   const environmentPrompt = createEnvironmentPrompt(analysis);
   console.log("Generated environment prompt:", environmentPrompt);
-  
+
   // Step 3: Generate environment texture with fal.ai
   console.log("Step 2: Generating environment with fal.ai...");
   const generatedImageUrl = await generateEnvironmentWithFal(environmentPrompt);
   console.log("Environment generated:", generatedImageUrl);
-  
+
   // Step 4: Upload to Supabase storage
   console.log("Step 3: Uploading to Supabase...");
   const storagePath = `scenes/${input.sceneId}/environment.jpg`;
-  const { url: environmentTextureUrl, path: environmentStoragePath } = 
+  const { url: environmentTextureUrl, path: environmentStoragePath } =
     await uploadFromUrl("ENVIRONMENTS", storagePath, generatedImageUrl, "image/jpeg");
   console.log("Upload complete:", environmentTextureUrl);
-  
+
   return {
     analysis,
     environmentTextureUrl,

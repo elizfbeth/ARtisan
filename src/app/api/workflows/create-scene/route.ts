@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { executeSceneCreation } from "@/lib/workflows/createScene";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import "@/lib/net"; // initialize IPv4-first DNS order
+import type { Id } from "@/convex/_generated/dataModel";
 
 /**
  * Scene Creation Workflow API Route
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     // Update scene status to analyzing
     await convex.mutation(api.scenes.updateStatus, {
-      sceneId,
+      sceneId: sceneId as Id<"scenes">,
       status: "analyzing",
     });
 
@@ -47,23 +49,38 @@ export async function POST(request: NextRequest) {
 
     // Update Convex with analysis results
     await convex.mutation(api.scenes.updateAnalysis, {
-      sceneId,
+      sceneId: sceneId as Id<"scenes">,
       analysis: result.analysis,
     });
 
     // Update Convex with environment texture
     await convex.mutation(api.scenes.updateEnvironment, {
-      sceneId,
+      sceneId: sceneId as Id<"scenes">,
       environmentTextureUrl: result.environmentTextureUrl,
       environmentStoragePath: result.environmentStoragePath,
       environmentType: result.environmentType,
     });
 
     // Optionally trigger music generation for the scene
+    // We call the API route directly instead of going through Convex to avoid
+    // environment variable issues with Convex actions
     try {
-      await convex.action(api.workflows.composeMusicWorkflow, {
-        sceneId,
+      const musicResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/workflows/compose-music`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneId: sceneId,
+          environmentType: result.analysis.environmentType,
+          mood: result.analysis.mood,
+          objectCount: 0, // No objects yet
+        }),
       });
+
+      if (!musicResponse.ok) {
+        console.error("Music generation failed:", musicResponse.statusText);
+      } else {
+        console.log("Music generation triggered successfully");
+      }
     } catch (error) {
       console.error("Music generation failed (non-critical):", error);
       // Don't fail the whole workflow if music generation fails
@@ -80,7 +97,7 @@ export async function POST(request: NextRequest) {
     try {
       if (body.sceneId) {
         await convex.mutation(api.scenes.updateStatus, {
-          sceneId: body.sceneId,
+          sceneId: body.sceneId as Id<"scenes">,
           status: "error",
           error: error instanceof Error ? error.message : "Unknown error",
         });

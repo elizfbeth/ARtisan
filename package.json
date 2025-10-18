@@ -24,6 +24,7 @@
     "react-dom": "19.1.0",
     "react-sketch-canvas": "^6.2.0",
     "three": "^0.180.0",
+    "undici": "^7.16.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

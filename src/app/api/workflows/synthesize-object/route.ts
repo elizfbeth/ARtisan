@@ -88,11 +88,32 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Object synthesis workflow error:", error);
 
+    // Provide user-friendly error messages based on the error type
+    const errorMessage = error instanceof Error ? error.message : "Workflow failed";
+    let userMessage = errorMessage;
+    let statusCode = 500;
+
+    // Check for specific error types
+    if (errorMessage.includes("503") || errorMessage.includes("overloaded")) {
+      userMessage = "The AI service is temporarily overloaded. Please try again in a few moments.";
+      statusCode = 503;
+    } else if (errorMessage.includes("429") || errorMessage.includes("rate limit")) {
+      userMessage = "Rate limit exceeded. Please wait a moment before trying again.";
+      statusCode = 429;
+    } else if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
+      userMessage = "The request timed out. Please check your connection and try again.";
+      statusCode = 504;
+    } else if (errorMessage.includes("network") || errorMessage.includes("fetch failed")) {
+      userMessage = "Network error. Please check your connection and try again.";
+      statusCode = 503;
+    }
+
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Workflow failed",
+        error: userMessage,
+        details: errorMessage, // Include technical details for debugging
       },
-      { status: 500 }
+      { status: statusCode }
     );
   }
 }

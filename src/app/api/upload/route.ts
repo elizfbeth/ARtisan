@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { uploadFile } from "@/lib/supabase";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import "@/lib/http-init"; // Initialize IPv4-first DNS and increased timeouts
 
 /**
  * Photo Upload API Route
@@ -13,7 +15,12 @@ import { api } from "@/convex/_generated/api";
  * 4. Triggers scene generation workflow
  */
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+// Verify Convex URL is configured
+if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
+  throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
+}
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL);
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,19 +70,63 @@ export async function POST(request: NextRequest) {
 
     console.log("Photo uploaded to Supabase:", photoUrl);
 
-    // Create scene in Convex
-    const sceneId = await convex.mutation(api.scenes.createScene, {
-      photoUrl,
-      photoStoragePath,
-      userId: userId || undefined,
-    });
+    // Verify the uploaded file is accessible
+    try {
+      const verifyResponse = await fetch(photoUrl, { method: "HEAD" });
+      if (!verifyResponse.ok) {
+        console.warn("Photo URL not immediately accessible, but continuing...");
+      } else {
+        console.log("Photo URL verified as accessible");
+      }
+    } catch (error) {
+      console.warn("Could not verify photo URL accessibility:", error);
+    }
 
-    console.log("Scene created in Convex:", sceneId);
+    // Create scene in Convex with timeout and retry
+    console.log("Creating scene in Convex...");
+    let sceneId: Id<"scenes">;
+
+    try {
+      sceneId = await Promise.race([
+        convex.mutation(api.scenes.createScene, {
+          photoUrl,
+          photoStoragePath,
+          userId: userId || undefined,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Convex mutation timeout after 20s")), 20000)
+        )
+      ]) as Id<"scenes">;
+
+      console.log("Scene created in Convex:", sceneId);
+    } catch (convexError) {
+      console.error("Convex mutation failed:", convexError);
+
+      // Retry once with a longer timeout
+      console.log("Retrying Convex mutation...");
+      try {
+        sceneId = await Promise.race([
+          convex.mutation(api.scenes.createScene, {
+            photoUrl,
+            photoStoragePath,
+            userId: userId || undefined,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Convex mutation timeout after 40s on retry")), 40000)
+          )
+        ]) as Id<"scenes">;
+
+        console.log("Scene created in Convex on retry:", sceneId);
+      } catch (retryError) {
+        console.error("Convex mutation failed on retry:", retryError);
+        throw new Error("Failed to create scene in Convex database. Please check your Convex connection.");
+      }
+    }
 
     // Trigger scene generation workflow directly
     // Note: This will be handled asynchronously
     // We don't await it to return quickly to the client
-    fetch("http://localhost:3000/api/workflows/create-scene", {
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/workflows/create-scene`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -120,7 +171,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const scene = await convex.query(api.scenes.getScene, {
-      sceneId: sceneId as any, // Type assertion for ID
+      sceneId: sceneId as Id<"scenes">,
     });
 
     return NextResponse.json({

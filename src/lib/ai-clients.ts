@@ -1,6 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import * as fal from "@fal-ai/serverless-client";
 import Groq from "groq-sdk";
+import { fetchWithRetry } from "./net";
+import "./http-init"; // Initialize IPv4-first DNS and increased timeouts
 
 /**
  * AI Service Clients Configuration
@@ -29,9 +31,9 @@ export function getGeminiClient() {
  */
 export async function analyzeImageWithGemini(imageUrl: string) {
   const model = getGeminiClient();
-  
-  // Fetch the image
-  const imageResponse = await fetch(imageUrl);
+
+  // Fetch the image with extended timeout and retries
+  const imageResponse = await fetchWithRetry(imageUrl, {}, { timeoutMs: 120_000, retries: 3 });
   const imageBuffer = await imageResponse.arrayBuffer();
   const imageBase64 = Buffer.from(imageBuffer).toString("base64");
   
@@ -44,26 +46,56 @@ export async function analyzeImageWithGemini(imageUrl: string) {
 
 Return only valid JSON, no additional text.`;
 
-  const result = await model.generateContent([
-    { text: prompt },
-    {
-      inlineData: {
-        mimeType: "image/jpeg",
-        data: imageBase64,
-      },
-    },
-  ]);
+  // Retry logic for handling overloaded API
+  const maxRetries = 3;
+  let lastError: Error | null = null;
 
-  const response = await result.response;
-  const text = response.text();
-  
-  // Parse JSON response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Failed to parse Gemini response as JSON");
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Exponential backoff: 2s, 4s, 8s
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`Retrying Gemini image analysis after ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const result = await model.generateContent([
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: imageBase64,
+          },
+        },
+      ]);
+
+      const response = result.response;
+      const text = response.text();
+
+      // Parse JSON response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error("Failed to parse Gemini response as JSON");
+      }
+
+      return JSON.parse(jsonMatch[0]);
+    } catch (error) {
+      lastError = error as Error;
+
+      // Check if it's a 503 (overloaded) or other retryable error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isRetryable = errorMessage.includes("503") ||
+                         errorMessage.includes("overloaded") ||
+                         errorMessage.includes("429") || // Rate limit
+                         errorMessage.includes("500"); // Server error
+
+      if (!isRetryable || attempt === maxRetries - 1) {
+        throw error;
+      }
+    }
   }
-  
-  return JSON.parse(jsonMatch[0]);
+
+  throw lastError || new Error("Failed to analyze image with Gemini");
 }
 
 /**
@@ -74,17 +106,18 @@ export async function describeObjectWithGemini(
   inputData: string
 ): Promise<string> {
   const model = getGeminiClient();
-  
+
   let prompt = "";
-  const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-  
+  // Use the SDK Part type for multimodal requests
+  const parts: Part[] = [] as unknown as Part[];
+
   if (inputType === "text") {
     prompt = `Convert this description into a detailed 3D object prompt suitable for 3D model generation. Include: shape, style, colors, materials, and key features. Keep it concise but descriptive.\n\nInput: ${inputData}\n\nDetailed 3D prompt:`;
     parts.push({ text: prompt });
   } else {
     // For sketch or photo
     prompt = `Describe this ${inputType === "sketch" ? "sketch" : "object"} as a detailed 3D object. Include: shape, style, colors, materials, and key features. Format it as a prompt suitable for 3D model generation.`;
-    
+
     parts.push(
       { text: prompt },
       {
@@ -95,10 +128,46 @@ export async function describeObjectWithGemini(
       }
     );
   }
-  
-  const result = await model.generateContent(parts);
-  const response = await result.response;
-  return response.text();
+
+  // Retry logic for handling overloaded API
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Exponential backoff: 2s, 4s, 8s
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`Retrying Gemini API after ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const result = await model.generateContent(parts);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      lastError = error as Error;
+
+      // Check if it's a 503 (overloaded) or other retryable error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isRetryable = errorMessage.includes("503") ||
+                         errorMessage.includes("overloaded") ||
+                         errorMessage.includes("429") || // Rate limit
+                         errorMessage.includes("500"); // Server error
+
+      if (!isRetryable || attempt === maxRetries - 1) {
+        // If not retryable or last attempt, throw or use fallback
+        if (inputType === "text") {
+          // For text input, we can use the input directly as a fallback
+          console.warn("Gemini API failed, using input as fallback description");
+          return `A detailed 3D model of ${inputData}. Realistic materials, proper proportions, suitable for AR display.`;
+        }
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error("Failed to generate description with Gemini");
 }
 
 // ============================================================================
@@ -240,7 +309,7 @@ export async function generateMusicWithElevenLabs(prompt: string): Promise<Array
   }
   
   // Use ElevenLabs Sound Generation API
-  const response = await fetch("https://api.elevenlabs.io/v1/sound-generation", {
+  const response = await fetchWithRetry("https://api.elevenlabs.io/v1/sound-generation", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -251,7 +320,7 @@ export async function generateMusicWithElevenLabs(prompt: string): Promise<Array
       duration_seconds: 30,
       prompt_influence: 0.7,
     }),
-  });
+  }, { timeoutMs: 60_000, retries: 2 });
 
   if (!response.ok) {
     throw new Error(`ElevenLabs API error: ${response.statusText}`);
@@ -274,7 +343,7 @@ export async function storeMemory(userId: string, memory: string) {
   }
   
   try {
-    const response = await fetch("https://api.mem0.ai/v1/memories", {
+    const response = await fetchWithRetry("https://api.mem0.ai/v1/memories", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -284,7 +353,7 @@ export async function storeMemory(userId: string, memory: string) {
         user_id: userId,
         messages: [{ role: "user", content: memory }],
       }),
-    });
+    }, { timeoutMs: 30_000, retries: 2 });
 
     if (!response.ok) {
       console.error("Failed to store memory:", response.statusText);
@@ -303,11 +372,11 @@ export async function retrieveMemories(userId: string): Promise<string[]> {
   }
   
   try {
-    const response = await fetch(`https://api.mem0.ai/v1/memories?user_id=${userId}`, {
+    const response = await fetchWithRetry(`https://api.mem0.ai/v1/memories?user_id=${userId}`, {
       headers: {
         "Authorization": `Bearer ${process.env.MEM0_API_KEY}`,
       },
-    });
+    }, { timeoutMs: 30_000, retries: 2 });
 
     if (!response.ok) {
       return [];
