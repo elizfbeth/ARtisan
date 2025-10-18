@@ -8,88 +8,130 @@ import { Id } from "@/convex/_generated/dataModel";
 /**
  * Scene Creation Workflow API Route
  * 
- * Orchestrates the transformation of a photo into an AR environment:
- * - Called by Convex action after photo upload
- * - Executes Gemini analysis and fal.ai generation
- * - Updates Convex with results
+ * Orchestrates AR environment creation:
+ * - Photo upload → AI generation workflow
+ * - World Labs template selection workflow
+ * - Executes appropriate workflow and updates Convex
  */
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export async function POST(request: NextRequest) {
   // Parse body once and store it
-  let body: { sceneId?: string; photoUrl?: string } = {};
+  let body: {
+    sceneId?: string;
+    photoUrl?: string;
+    environmentSource?: string;
+    worldLabsWorldId?: string;
+  } = {};
   
   try {
     body = await request.json();
-    const { sceneId, photoUrl } = body;
+    const { sceneId, photoUrl, environmentSource, worldLabsWorldId } = body;
 
-    if (!sceneId || !photoUrl) {
-      return NextResponse.json(
-        { error: "Scene ID and photo URL are required" },
-        { status: 400 }
-      );
+    // Validate based on environment source
+    if (environmentSource === "worldlabs-template") {
+      if (!worldLabsWorldId) {
+        return NextResponse.json(
+          { error: "World Labs world ID is required for template workflow" },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Standard photo upload workflow
+      if (!photoUrl) {
+        return NextResponse.json(
+          { error: "Photo URL is required for generation workflow" },
+          { status: 400 }
+        );
+      }
     }
 
-    console.log("Starting scene creation workflow:", sceneId);
+    // Create scene if sceneId not provided (for World Labs workflow)
+    let sceneIdTyped: Id<"scenes">;
+    
+    if (sceneId) {
+      sceneIdTyped = sceneId as Id<"scenes">;
+    } else {
+      // Create new scene
+      sceneIdTyped = await convex.mutation(api.scenes.create, {
+        photoUrl: photoUrl || "",
+        photoStoragePath: "",
+        worldLabsWorldId: worldLabsWorldId,
+        worldLabsSource: environmentSource === "worldlabs-template" ? "template" : undefined,
+      });
+      console.log("Created new scene:", sceneIdTyped);
+    }
 
-    // Cast sceneId to proper Convex ID type
-    const sceneIdTyped = sceneId as Id<"scenes">;
+    console.log("Starting scene creation workflow:", sceneIdTyped);
 
-    // Update scene status to analyzing
+    // Update scene status to analyzing/generating
     await convex.mutation(api.scenes.updateStatus, {
       sceneId: sceneIdTyped,
-      status: "analyzing",
+      status: environmentSource === "worldlabs-template" ? "generating" : "analyzing",
     });
 
     // Execute the scene creation workflow
     const result = await executeSceneCreation({
       photoUrl,
-      sceneId,
+      sceneId: sceneIdTyped as string,
+      environmentSource: environmentSource as "generate" | "worldlabs-template" | undefined,
+      worldLabsWorldId,
     });
 
     console.log("Scene creation complete:", result);
 
-    // Update Convex with analysis results
-    await convex.mutation(api.scenes.updateAnalysis, {
-      sceneId: sceneIdTyped,
-      analysis: result.analysis,
-    });
+    // Update Convex with analysis results (optional for World Labs)
+    if (result.analysis) {
+      await convex.mutation(api.scenes.updateAnalysis, {
+        sceneId: sceneIdTyped,
+        analysis: result.analysis,
+      });
+    }
 
-    // Update Convex with environment texture
+    // Update Convex with environment texture and World Labs data
     await convex.mutation(api.scenes.updateEnvironment, {
       sceneId: sceneIdTyped,
       environmentTextureUrl: result.environmentTextureUrl,
       environmentStoragePath: result.environmentStoragePath,
       environmentType: result.environmentType,
+      worldLabsWorldId: result.worldLabsWorldId,
     });
 
-    // Optionally trigger scene audio generation for the scene (async, non-blocking)
-    // Run this in the background without blocking the response
-    executeSceneAudioGeneration({
-      sceneId,
-      environmentType: result.analysis.environmentType,
-      mood: result.analysis.mood,
-      objectCount: 0, // Initial generation with no objects
-      objects: [],
-    })
-      .then(async (audioResult) => {
-        // Update Convex with audio URL
-        await convex.mutation(api.scenes.updateAudio, {
-          sceneId: sceneIdTyped,
-          audioUrl: audioResult.audioUrl,
-          audioStoragePath: audioResult.audioStoragePath,
-          audioMood: audioResult.audioMood,
-        });
-        console.log("Scene audio generation complete:", audioResult);
-      })
-      .catch((error) => {
-        console.error("Scene audio generation failed (non-critical):", error);
-        // Don't fail the whole workflow if audio generation fails
+    // Update waypoints if provided
+    if (result.waypoints) {
+      await convex.mutation(api.scenes.updateWaypoints, {
+        sceneId: sceneIdTyped,
+        waypoints: result.waypoints,
       });
+    }
+
+    // Optionally trigger scene audio generation (only for standard workflow with analysis)
+    if (result.analysis) {
+      executeSceneAudioGeneration({
+        sceneId: sceneIdTyped,
+        environmentType: result.analysis.environmentType,
+        mood: result.analysis.mood,
+        objectCount: 0,
+        objects: [],
+      })
+        .then(async (audioResult) => {
+          await convex.mutation(api.scenes.updateAudio, {
+            sceneId: sceneIdTyped,
+            audioUrl: audioResult.audioUrl,
+            audioStoragePath: audioResult.audioStoragePath,
+            audioMood: audioResult.audioMood,
+          });
+          console.log("Scene audio generation complete:", audioResult);
+        })
+        .catch((error) => {
+          console.error("Scene audio generation failed (non-critical):", error);
+        });
+    }
 
     return NextResponse.json({
       success: true,
+      sceneId: sceneIdTyped,
       result,
     });
   } catch (error) {
@@ -111,6 +153,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Workflow failed",
+        details: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 }
     );

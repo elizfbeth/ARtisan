@@ -24,9 +24,16 @@ export default defineSchema({
   scenes: defineTable({
     userId: v.optional(v.string()),
     
-    // Original photo uploaded by user
-    photoUrl: v.string(),
-    photoStoragePath: v.string(),
+    // Original photo uploaded by user (optional for World Labs templates)
+    photoUrl: v.optional(v.string()),
+    photoStoragePath: v.optional(v.string()),
+    
+    // World Labs integration
+    worldLabsWorldId: v.optional(v.string()),
+    worldLabsSource: v.optional(v.union(
+      v.literal("template"),
+      v.literal("generated")
+    )),
     
     // Scene generation status
     status: v.union(

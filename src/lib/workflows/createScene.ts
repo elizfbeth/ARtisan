@@ -3,26 +3,36 @@ import {
   generateEnvironmentWithFal,
 } from "../ai-clients";
 import { uploadFromUrl } from "../supabase";
+import {
+  fetchWorldDetails,
+  getBest3DFormat,
+  getPanoramaUrls,
+  WorldLabsWorld,
+} from "../worldlabs";
 
 /**
- * Scene Creation Workflow - Enhanced with Location Intelligence
+ * Scene Creation Workflow - Enhanced with Location Intelligence & World Labs
  * 
  * Orchestrates the transformation of a user photo into an AR environment:
  * 1. Analyze photo with Gemini 2.5 Flash (includes location detection)
  * 2. Search for location-specific information using Exa AI
- * 3. Generate enhanced environment texture with fal.ai
+ * 3. Generate enhanced environment texture with fal.ai OR use World Labs template
  * 4. Store assets in Supabase
  * 
  * This workflow is typically triggered via Manus AI orchestration
  */
 
+export type EnvironmentSource = "generate" | "worldlabs-template";
+
 export interface SceneCreationInput {
-  photoUrl: string;
+  photoUrl?: string;
   sceneId: string;
+  environmentSource?: EnvironmentSource;
+  worldLabsWorldId?: string;
 }
 
 export interface SceneCreationResult {
-  analysis: {
+  analysis?: {
     environmentType: string;
     keyObjects: string[];
     depthPerspective: string;
@@ -43,7 +53,9 @@ export interface SceneCreationResult {
   };
   environmentTextureUrl: string;
   environmentStoragePath: string;
-  environmentType: "panorama" | "skybox";
+  environmentType: "panorama" | "skybox" | "worldlabs";
+  worldLabsWorldId?: string;
+  worldLabsData?: WorldLabsWorld;
   waypoints?: Array<{
     id: string;
     position: { x: number; y: number; z: number };
@@ -58,6 +70,18 @@ export async function executeSceneCreation(
   input: SceneCreationInput
 ): Promise<SceneCreationResult> {
   console.log("Starting scene creation workflow for scene:", input.sceneId);
+  
+  const environmentSource = input.environmentSource || "generate";
+  
+  // World Labs template workflow
+  if (environmentSource === "worldlabs-template" && input.worldLabsWorldId) {
+    return await executeWorldLabsWorkflow(input.sceneId, input.worldLabsWorldId);
+  }
+  
+  // Standard AI generation workflow
+  if (!input.photoUrl) {
+    throw new Error("Photo URL required for generation workflow");
+  }
   
   // Step 1: Analyze the photo with Gemini (includes location detection)
   console.log("Step 1: Analyzing photo with Gemini...");
@@ -100,6 +124,58 @@ export async function executeSceneCreation(
     environmentStoragePath,
     environmentType: "panorama",
     waypoints,
+  };
+}
+
+/**
+ * Execute World Labs template workflow
+ */
+async function executeWorldLabsWorkflow(
+  sceneId: string,
+  worldLabsWorldId: string
+): Promise<SceneCreationResult> {
+  console.log("Using World Labs template:", worldLabsWorldId);
+  
+  // Step 1: Fetch World Labs world data
+  console.log("Step 1: Fetching World Labs world data...");
+  const worldData = await fetchWorldDetails(worldLabsWorldId);
+  console.log("World data fetched:", worldData.display_name);
+  
+  // Step 2: Get best available 3D format
+  const format = getBest3DFormat(worldData);
+  console.log("Using format:", format.format);
+  
+  // Step 3: For panoramas, get the first panorama URL as texture
+  let environmentTextureUrl = worldData.generation_output.cond_image_url;
+  
+  if (format.format === "panoramas" && format.metadata) {
+    const panoramas = await getPanoramaUrls(worldData);
+    if (panoramas.length > 0) {
+      environmentTextureUrl = panoramas[0].url;
+    }
+  }
+  
+  // Step 4: For storage path, just use the World Labs CDN URL directly
+  console.log("Step 4: Using World Labs CDN URL...");
+  const storagePath = `scenes/${sceneId}/worldlabs_${worldLabsWorldId}`;
+  const environmentStoragePath = storagePath;
+  
+  // Generate synthetic analysis from World Labs tags and data
+  const analysis = {
+    environmentType: worldData.tags.join(", ") || "immersive",
+    keyObjects: [],
+    depthPerspective: "multi-plane",
+    colorPalette: [],
+    mood: worldData.tags.includes("realism") ? "realistic" : "artistic",
+  };
+  
+  return {
+    analysis,
+    environmentTextureUrl,
+    environmentStoragePath,
+    environmentType: "worldlabs",
+    worldLabsWorldId,
+    worldLabsData: worldData,
   };
 }
 

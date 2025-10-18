@@ -19,6 +19,8 @@ import FeedbackEffects from "./FeedbackEffects";
 import PhysicsWorld from "./PhysicsWorld";
 import SceneChat from "./SceneChat";
 import { useHaptics } from "@/hooks/useHaptics";
+import WorldLabsPanoramaRenderer from "./WorldLabsPanoramaRenderer";
+import { fetchWorldDetails, getPanoramaUrls } from "@/lib/worldlabs";
 
 /**
  * Enhanced ARViewer Component
@@ -47,6 +49,7 @@ interface SceneObject {
 
 interface ARViewerProps {
   environmentTextureUrl?: string;
+  worldLabsWorldId?: string;
   objects: SceneObject[];
   audioUrl?: string;
   waypoints?: Array<{
@@ -235,10 +238,64 @@ function LoadingFallback() {
 }
 
 /**
+ * World Labs environment component
+ */
+function WorldLabsEnvironment({ worldLabsWorldId }: { worldLabsWorldId: string }) {
+  const [panoramas, setPanoramas] = useState<Array<{
+    url: string;
+    position: [number, number, number];
+    quaternion: [number, number, number, number];
+  }> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadWorldLabs = async () => {
+      try {
+        setLoading(true);
+        const worldData = await fetchWorldDetails(worldLabsWorldId);
+        const panos = await getPanoramaUrls(worldData);
+        setPanoramas(panos);
+        setError(null);
+      } catch (err) {
+        console.error("Failed to load World Labs environment:", err);
+        setError("Failed to load World Labs environment");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadWorldLabs();
+  }, [worldLabsWorldId]);
+
+  if (loading) {
+    return (
+      <Html center>
+        <div className="bg-black bg-opacity-75 text-white px-4 py-2 rounded">
+          Loading World Labs environment...
+        </div>
+      </Html>
+    );
+  }
+
+  if (error || !panoramas) {
+    return (
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#90EE90" />
+      </mesh>
+    );
+  }
+
+  return <WorldLabsPanoramaRenderer panoramas={panoramas} />;
+}
+
+/**
  * Main AR scene component
  */
 function ARScene({
   environmentTextureUrl,
+  worldLabsWorldId,
   objects,
   waypoints,
   selectedObjectId,
@@ -251,6 +308,7 @@ function ARScene({
   enablePhysics,
 }: {
   environmentTextureUrl?: string;
+  worldLabsWorldId?: string;
   objects: SceneObject[];
   waypoints?: Array<{
     id: string;
@@ -281,8 +339,12 @@ function ARScene({
       {/* Weather System */}
       <WeatherSystem weather={weather} intensity={0.5} />
 
-      {/* Environment */}
-      {environmentTextureUrl ? (
+      {/* Environment - World Labs or Standard */}
+      {worldLabsWorldId ? (
+        <Suspense fallback={null}>
+          <WorldLabsEnvironment worldLabsWorldId={worldLabsWorldId} />
+        </Suspense>
+      ) : environmentTextureUrl ? (
         <Suspense fallback={null}>
           <EnvironmentSphere textureUrl={environmentTextureUrl} />
         </Suspense>
@@ -404,6 +466,7 @@ function AudioPlayer({ audioUrl, isPlaying }: { audioUrl?: string; isPlaying: bo
  */
 export default function ARViewer({
   environmentTextureUrl,
+  worldLabsWorldId,
   objects,
   audioUrl,
   waypoints,
@@ -486,6 +549,7 @@ export default function ARViewer({
         <Suspense fallback={<LoadingFallback />}>
           <ARScene
             environmentTextureUrl={environmentTextureUrl}
+            worldLabsWorldId={worldLabsWorldId}
             objects={objects}
             waypoints={waypoints}
             selectedObjectId={selectedObjectId}

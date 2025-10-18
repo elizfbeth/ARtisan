@@ -9,20 +9,24 @@ import { Id } from "./_generated/dataModel";
  */
 
 /**
- * Create a new scene from an uploaded photo
+ * Create a new scene (from photo upload or World Labs template)
  */
-export const createScene = mutation({
+export const create = mutation({
   args: {
     photoUrl: v.string(),
     photoStoragePath: v.string(),
     userId: v.optional(v.string()),
+    worldLabsWorldId: v.optional(v.string()),
+    worldLabsSource: v.optional(v.union(v.literal("template"), v.literal("generated"))),
   },
   handler: async (ctx, args) => {
     const sceneId = await ctx.db.insert("scenes", {
       userId: args.userId,
       photoUrl: args.photoUrl,
       photoStoragePath: args.photoStoragePath,
-      status: "analyzing",
+      worldLabsWorldId: args.worldLabsWorldId,
+      worldLabsSource: args.worldLabsSource,
+      status: args.worldLabsWorldId ? "generating" : "analyzing",
       objects: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -31,6 +35,11 @@ export const createScene = mutation({
     return sceneId;
   },
 });
+
+/**
+ * Legacy alias for backward compatibility
+ */
+export const createScene = create;
 
 /**
  * Get a scene by ID with real-time updates
@@ -101,13 +110,37 @@ export const updateEnvironment = mutation({
     environmentTextureUrl: v.string(),
     environmentStoragePath: v.string(),
     environmentType: v.string(),
+    worldLabsWorldId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.sceneId, {
       environmentTextureUrl: args.environmentTextureUrl,
       environmentStoragePath: args.environmentStoragePath,
       environmentType: args.environmentType,
+      worldLabsWorldId: args.worldLabsWorldId,
       status: "ready",
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Update scene waypoints
+ */
+export const updateWaypoints = mutation({
+  args: {
+    sceneId: v.id("scenes"),
+    waypoints: v.array(
+      v.object({
+        id: v.string(),
+        position: v.object({ x: v.number(), y: v.number(), z: v.number() }),
+        label: v.string(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.sceneId, {
+      waypoints: args.waypoints,
       updatedAt: Date.now(),
     });
   },

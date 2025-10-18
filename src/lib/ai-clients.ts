@@ -529,8 +529,17 @@ export async function generateAudioWithElevenLabs(prompt: string): Promise<Array
     throw new Error("Missing ELEVENLABS_API_KEY environment variable");
   }
   
-  // Validate prompt length (ElevenLabs has limits - typically 1000 chars)
-  const truncatedPrompt = prompt.length > 1000 ? prompt.slice(0, 1000) : prompt;
+  // ElevenLabs Sound Generation API has a strict 450 character limit
+  const MAX_PROMPT_LENGTH = 450;
+  let truncatedPrompt: string;
+  
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    // Truncate to 447 to leave room for "..." (total 450)
+    truncatedPrompt = prompt.slice(0, 447).trim() + "...";
+    console.warn(`Audio prompt truncated from ${prompt.length} to ${truncatedPrompt.length} characters`);
+  } else {
+    truncatedPrompt = prompt;
+  }
   
   // Construct request body for ElevenLabs Sound Generation API
   // Based on ElevenLabs API v1 specification
@@ -543,6 +552,7 @@ export async function generateAudioWithElevenLabs(prompt: string): Promise<Array
   console.log("ElevenLabs API request:", { 
     endpoint: "sound-generation",
     promptLength: truncatedPrompt.length,
+    maxLength: MAX_PROMPT_LENGTH,
     duration: 22,
     promptInfluence: 0.3,
   });
