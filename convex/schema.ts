@@ -24,9 +24,23 @@ export default defineSchema({
   scenes: defineTable({
     userId: v.optional(v.string()),
     
-    // Original photo uploaded by user
-    photoUrl: v.string(),
-    photoStoragePath: v.string(),
+    // Original photo uploaded by user (optional for gallery templates)
+    photoUrl: v.optional(v.string()),
+    photoStoragePath: v.optional(v.string()),
+    
+    // Gallery integration (new field names)
+    galleryWorldId: v.optional(v.string()),
+    gallerySource: v.optional(v.union(
+      v.literal("template"),
+      v.literal("generated")
+    )),
+    
+    // Legacy field names (for backward compatibility with existing data)
+    worldLabsWorldId: v.optional(v.string()),
+    worldLabsSource: v.optional(v.union(
+      v.literal("template"),
+      v.literal("generated")
+    )),
     
     // Scene generation status
     status: v.union(
@@ -47,7 +61,28 @@ export default defineSchema({
       depthPerspective: v.string(),
       colorPalette: v.array(v.string()),
       mood: v.string(),
+      location: v.optional(v.object({
+        hasLocation: v.boolean(),
+        locationName: v.string(),
+        locationType: v.string(),
+        locationKeywords: v.array(v.string()),
+      })),
     })),
+    
+    // Location context from Exa AI
+    locationContext: v.optional(v.object({
+      description: v.string(),
+      facts: v.array(v.string()),
+      atmosphere: v.string(),
+      historicalContext: v.string(),
+    })),
+    
+    // Waypoints for Street View navigation
+    waypoints: v.optional(v.array(v.object({
+      id: v.string(),
+      position: v.object({ x: v.number(), y: v.number(), z: v.number() }),
+      label: v.string(),
+    }))),
     
     // Generated environment
     environmentTextureUrl: v.optional(v.string()),
@@ -59,6 +94,7 @@ export default defineSchema({
       id: v.string(),
       name: v.string(),
       modelUrl: v.string(),
+      modelType: v.optional(v.union(v.literal("glb"), v.literal("image"))), // Track model type
       storagePath: v.string(),
       position: v.object({ x: v.number(), y: v.number(), z: v.number() }),
       rotation: v.object({ x: v.number(), y: v.number(), z: v.number() }),

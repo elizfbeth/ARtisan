@@ -1,24 +1,40 @@
 "use client";
 
 import { useRef, useEffect, useState, Suspense } from "react";
-import { Canvas, useThree, useFrame, useLoader } from "@react-three/fiber";
-import { 
-  OrbitControls, 
-  Environment, 
-  Sky,
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import {
+  PointerLockControls,
   Html,
   useTexture,
 } from "@react-three/drei";
 import * as THREE from "three";
+import AnimatedObject from "./AnimatedObject";
+import ObjectInspector from "./ObjectInspector";
+import CameraController, { CameraModeHUD, CameraMode } from "./CameraController";
+import { AmbientAudioManager } from "./SpatialAudio";
+import EnvironmentController, { TimeOfDay } from "./EnvironmentController";
+import WeatherSystem, { WeatherType } from "./WeatherSystem";
+import Waypoints, { Minimap } from "./Waypoints";
+import FeedbackEffects from "./FeedbackEffects";
+import PhysicsWorld from "./PhysicsWorld";
+import SceneChat from "./SceneChat";
+import { useHaptics } from "@/hooks/useHaptics";
+import GalleryPanoramaRenderer from "./GalleryPanoramaRenderer";
+import { fetchWorldDetails, getPanoramaUrls } from "@/lib/gallery";
 
 /**
- * ARViewer Component
+ * Enhanced ARViewer Component
  * 
- * Renders the 3D AR scene with:
- * - Environment/skybox from generated texture
- * - User-created objects from Doodle to Life
- * - Camera controls (WASD + mouse)
- * - AI-generated audio
+ * Comprehensive immersive AR experience with:
+ * - Interactive object manipulation (drag, rotate, scale)
+ * - Multi-camera system (first-person, orbit, bird's eye, cinematic)
+ * - Physics simulation
+ * - Dynamic lighting and time-of-day
+ * - Weather effects
+ * - Spatial audio
+ * - AI-powered chat assistant
+ * - Waypoint teleportation
+ * - Visual feedback effects
  */
 
 interface SceneObject {
@@ -28,13 +44,32 @@ interface SceneObject {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number };
   scale: { x: number; y: number; z: number };
+  createdAt: number;
 }
 
 interface ARViewerProps {
   environmentTextureUrl?: string;
+  galleryWorldId?: string;
   objects: SceneObject[];
   audioUrl?: string;
-  onObjectMove?: (objectId: string, position: { x: number; y: number; z: number }) => void;
+  waypoints?: Array<{
+    id: string;
+    position: { x: number; y: number; z: number };
+    label: string;
+  }>;
+  sceneContext?: {
+    environmentType?: string;
+    mood?: string;
+    locationName?: string;
+  };
+  onObjectUpdate?: (
+    objectId: string,
+    transform: {
+      position?: { x: number; y: number; z: number };
+      rotation?: { x: number; y: number; z: number };
+      scale?: { x: number; y: number; z: number };
+    }
+  ) => void;
   onObjectDelete?: (objectId: string) => void;
 }
 
@@ -43,7 +78,7 @@ interface ARViewerProps {
  */
 function EnvironmentSphere({ textureUrl }: { textureUrl: string }) {
   const texture = useTexture(textureUrl);
-  
+
   useEffect(() => {
     // Configure texture for spherical mapping
     texture.mapping = THREE.EquirectangularReflectionMapping;
@@ -59,215 +94,48 @@ function EnvironmentSphere({ textureUrl }: { textureUrl: string }) {
 }
 
 /**
- * Scene object component - renders individual 3D objects with drag and delete functionality
+ * PointerLockControls wrapper with state tracking
  */
-function SceneObject3D({ 
-  object, 
-  onDelete, 
-  onMove,
-  onDragStart,
-  onDragEnd,
-}: { 
-  object: SceneObject; 
-  onDelete?: (objectId: string) => void;
-  onMove?: (objectId: string, position: { x: number; y: number; z: number }) => void;
-  onDragStart?: () => void;
-  onDragEnd?: () => void;
+function TrackedPointerLockControls({
+  onLock,
+  onUnlock,
+}: {
+  onLock?: () => void;
+  onUnlock?: () => void;
 }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const justFinishedDraggingRef = useRef(false);
-  const { camera, raycaster } = useThree();
-  const [hovered, setHovered] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ 
-    x: 0, 
-    y: 0, 
-    position: { x: 0, y: 0, z: 0 },
-    worldPosition: new THREE.Vector3()
-  });
-  const [localPosition, setLocalPosition] = useState(object.position);
-  // Load texture (for now we're using images as textures on planes)
-  // In production, this would load actual .glb models
-  const texture = useTexture(object.modelUrl);
-
   useEffect(() => {
-    // Only update local position if we're not currently dragging
-    // This prevents the object from snapping back to the old position while dragging
-    if (!isDragging && !justFinishedDraggingRef.current) {
-      setLocalPosition(object.position);
-      // Also update the mesh position to match
-      if (meshRef.current) {
-        meshRef.current.position.set(object.position.x, object.position.y, object.position.z);
+    const handlePointerLockChange = () => {
+      if (document.pointerLockElement) {
+        if (onLock) onLock();
+      } else {
+        if (onUnlock) onUnlock();
       }
-    }
-  }, [object.position, isDragging]);
+    };
 
-  useEffect(() => {
-    document.body.style.cursor = hovered ? (isDragging ? "grabbing" : "grab") : "auto";
-  }, [hovered, isDragging]);
+    document.addEventListener("pointerlockchange", handlePointerLockChange);
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onDelete) {
-      onDelete(object.id);
-    }
-  };
+    return () => {
+      document.removeEventListener("pointerlockchange", handlePointerLockChange);
+    };
+  }, [onLock, onUnlock]);
 
-  const handlePointerDown = (event: any) => {
-    if (event.button !== 0) return;
-    event.stopPropagation();
-
-    // Get the world position of the object
-    const worldPosition = new THREE.Vector3();
-    meshRef.current?.getWorldPosition(worldPosition);
-
-    setIsDragging(true);
-    setDragStart({ 
-      x: event.clientX, 
-      y: event.clientY, 
-      position: {...object.position},
-      worldPosition: worldPosition.clone()
-    });
-    
-    if (onDragStart) {
-      onDragStart();
-    }
-  };
-
-  const handlePointerMove = (event: any) => {
-    if (!isDragging || !meshRef.current) return;
-    
-    // Create a raycaster from the camera through the mouse position
-    const mouse = new THREE.Vector2();
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    
-    raycaster.setFromCamera(mouse, camera);
-    
-    // Create a plane at the object's Z position for dragging
-    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -dragStart.worldPosition.z);
-    const intersectionPoint = new THREE.Vector3();
-    
-    raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
-    
-    if (intersectionPoint) {
-      // Calculate the offset from the initial click point
-      const offset = intersectionPoint.clone().sub(dragStart.worldPosition);
-      const newPosition = {
-        x: dragStart.position.x + offset.x,
-        y: dragStart.position.y + offset.y,
-        z: dragStart.position.z
-      };
-      
-      setLocalPosition(newPosition);
-      meshRef.current.position.set(newPosition.x, newPosition.y, newPosition.z);
-    }
-  };
-
-  const handlePointerUp = () => {
-    if (!isDragging) return;
-
-    setIsDragging(false);
-    justFinishedDraggingRef.current = true;
-    
-    // Get the current position from the mesh for accurate final position
-    const finalPosition = meshRef.current ? {
-      x: meshRef.current.position.x,
-      y: meshRef.current.position.y,
-      z: meshRef.current.position.z
-    } : localPosition;
-    
-    // Update local position to match final position
-    setLocalPosition(finalPosition);
-    
-    // Call the database update with the final position
-    if (onMove) {
-      onMove(object.id, finalPosition);
-    }
-    
-    if (onDragEnd) {
-      onDragEnd();
-    }
-    
-    // Reset the flag after a short delay to allow the database update to complete
-    setTimeout(() => {
-      justFinishedDraggingRef.current = false;
-    }, 100);
-  };
-
-  useEffect(() => {
-    if (isDragging) {
-      const handleGlobalPointerMove = (event: PointerEvent) => {
-        handlePointerMove(event);
-      };
-      
-      const handleGlobalPointerUp = () => {
-        handlePointerUp();
-      };
-
-      document.addEventListener('pointermove', handleGlobalPointerMove);
-      document.addEventListener('pointerup', handleGlobalPointerUp);
-
-      return () => {
-        document.removeEventListener('pointermove', handleGlobalPointerMove);
-        document.removeEventListener('pointerup', handleGlobalPointerUp);
-      };
-    }
-  }, [isDragging, dragStart, camera, raycaster]);
-
-  return (
-    <mesh
-      ref={meshRef}
-      position={[localPosition.x, localPosition.y, localPosition.z]}
-      rotation={[object.rotation.x, object.rotation.y, object.rotation.z]}
-      scale={[object.scale.x, object.scale.y, object.scale.z]}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
-      onPointerDown={handlePointerDown}
-    >
-      {/* Use a proper 3D box instead of a plane for better 3D interaction */}
-      <boxGeometry args={[1.5, 1.5, 0.1]} />
-      <meshStandardMaterial 
-        map={texture} 
-        transparent 
-        side={THREE.DoubleSide}
-        emissive={hovered ? "#333333" : "#000000"}
-        opacity={isDragging ? 0.8 : 1.0}
-      />
-      
-      {/* Label and Delete Button */}
-      {hovered && (
-        <Html distanceFactor={10} position={[0, 1.2, 0]}>
-          <div className="bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm whitespace-nowrap flex items-center gap-2">
-            <span>{object.name}</span>
-            {onDelete && (
-              <button
-                onClick={handleDelete}
-                //onMouseEnter={() => setShowDeleteButton(true)}
-                //onMouseLeave={() => setShowDeleteButton(false)}
-                className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs transition-colors"
-                title="Delete object"
-              >
-                🗑️
-              </button>
-            )}
-          </div>
-          <div className = "text-xs text-gray-500 mt-1 text-center">
-            {isDragging ? "Dragging..." : "Drag to move"}
-          </div>
-        </Html>
-      )}
-    </mesh>
-  );
+  return <PointerLockControls />;
 }
 
 /**
- * Camera controller with WASD + mouse controls
+ * Enhanced First-person navigation controller with WASD + mouse look
  */
-function CameraController() {
+function FirstPersonController({
+  enabled,
+  onPositionChange,
+}: {
+  enabled: boolean;
+  onPositionChange?: (pos: { x: number; z: number }) => void;
+}) {
   const { camera } = useThree();
-  const moveSpeed = 0.15;
   const keysPressed = useRef<Set<string>>(new Set());
+  const worldBounds = 50; // Boundary limit
+  const { vibrate } = useHaptics();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -287,36 +155,69 @@ function CameraController() {
     };
   }, []);
 
-  useFrame(() => {
+  useFrame((state) => {
+    if (!enabled) return;
+
     const keys = keysPressed.current;
     const direction = new THREE.Vector3();
 
-    // Get camera forward and right vectors
+    // Get camera forward and right vectors (only XZ plane for ground movement)
     camera.getWorldDirection(direction);
+    direction.y = 0; // Lock to horizontal plane
+    direction.normalize();
+
     const forward = direction.clone();
     const right = new THREE.Vector3();
     right.crossVectors(camera.up, forward).normalize();
 
+    const velocity = new THREE.Vector3();
+
+    // Sprint multiplier
+    const isSprinting = keys.has("shift");
+    const moveSpeed = isSprinting ? 0.4 : 0.2;
+
     // WASD movement
-    if (keys.has("w")) {
-      camera.position.addScaledVector(forward, moveSpeed);
+    if (keys.has("w")) velocity.add(forward);
+    if (keys.has("s")) velocity.sub(forward);
+    if (keys.has("a")) velocity.add(right);
+    if (keys.has("d")) velocity.sub(right);
+
+    // Normalize diagonal movement
+    if (velocity.length() > 0) {
+      velocity.normalize().multiplyScalar(moveSpeed);
     }
-    if (keys.has("s")) {
-      camera.position.addScaledVector(forward, -moveSpeed);
+
+    // Jump (simple vertical boost)
+    if (keys.has(" ") && camera.position.y <= 1.6) {
+      camera.position.y += 0.1;
+      vibrate("light");
     }
-    if (keys.has("a")) {
-      camera.position.addScaledVector(right, moveSpeed);
+
+    // Apply gravity
+    if (camera.position.y > 1.6) {
+      camera.position.y -= 0.05;
+    } else {
+      camera.position.y = 1.6;
     }
-    if (keys.has("d")) {
-      camera.position.addScaledVector(right, -moveSpeed);
+
+    // Apply movement with boundary collision
+    const newPos = camera.position.clone().add(velocity);
+
+    // Keep within world bounds
+    newPos.x = Math.max(-worldBounds, Math.min(worldBounds, newPos.x));
+    newPos.z = Math.max(-worldBounds, Math.min(worldBounds, newPos.z));
+
+    camera.position.copy(newPos);
+
+    // Camera bob while walking
+    if (velocity.length() > 0) {
+      const bobAmount = Math.sin(state.clock.getElapsedTime() * 10) * 0.02;
+      camera.position.y += bobAmount;
     }
-    
-    // Up/down movement
-    if (keys.has(" ") || keys.has("e")) {
-      camera.position.y += moveSpeed;
-    }
-    if (keys.has("shift") || keys.has("q")) {
-      camera.position.y -= moveSpeed;
+
+    // Notify position change for minimap
+    if (onPositionChange) {
+      onPositionChange({ x: camera.position.x, z: camera.position.z });
     }
   });
 
@@ -337,106 +238,282 @@ function LoadingFallback() {
 }
 
 /**
- * Main AR scene component
+ * Gallery environment component with navigation support
  */
-function ARScene({
-  environmentTextureUrl,
-  objects,
-  onObjectDelete,
-  onObjectMove,
-}: {
-  environmentTextureUrl?: string;
-  objects: SceneObject[];
-  onObjectDelete?: (objectId: string) => void;
-  onObjectMove?: (objectId: string, position: { x: number; y: number; z: number }) => void;
-}) {
-  const [isAnyObjectDragging, setIsAnyObjectDragging] = useState(false);
+function GalleryEnvironment({ galleryWorldId }: { galleryWorldId: string }) {
+  const [panoramas, setPanoramas] = useState<Array<{
+    url: string;
+    position: [number, number, number];
+    quaternion: [number, number, number, number];
+  }> | null>(null);
+  const [worldData, setWorldData] = useState<{
+    generation_output: {
+      collider_mesh_url?: string;
+    };
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { scene } = useThree();
 
-  const handleObjectMove = (objectId: string, position: { x: number; y: number; z: number }) => {
-    if (onObjectMove) {
-      onObjectMove(objectId, position);
-    }
-  };
+  useEffect(() => {
+    const loadGallery = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchWorldDetails(galleryWorldId);
+        setWorldData(data);
+        const panos = await getPanoramaUrls(data);
+        setPanoramas(panos);
 
-  const handleDragStart = () => {
-    setIsAnyObjectDragging(true);
-  };
+        // Load collision mesh for navigation
+        if (data.generation_output.collider_mesh_url) {
+          console.log("Loading collision mesh for navigation...");
+          const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+          const loader = new GLTFLoader();
+          
+          loader.load(
+            data.generation_output.collider_mesh_url,
+            (gltf) => {
+              console.log("Collision mesh loaded successfully");
+              
+              // Add collision mesh (invisible ground for navigation)
+              const collisionMesh = gltf.scene;
+              collisionMesh.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  // Create invisible ground plane for walking
+                  child.material = new THREE.MeshBasicMaterial({
+                    transparent: true,
+                    opacity: 0,
+                  });
+                  child.visible = true; // Keep visible for raycasting
+                  child.receiveShadow = false;
+                  child.castShadow = false;
+                }
+              });
+              
+              scene.add(collisionMesh);
+              console.log("Collision mesh added - navigation enabled");
+            },
+            undefined,
+            (err) => {
+              console.warn("Failed to load collision mesh (non-critical):", err);
+            }
+          );
+        }
+        
+        setError(null);
+      } catch (err) {
+        console.error("Failed to load gallery environment:", err);
+        setError("Failed to load gallery environment");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleDragEnd = () => {
-    setIsAnyObjectDragging(false);
-  };
+    loadGallery();
+
+    return () => {
+      // Cleanup collision mesh on unmount
+      const objectsToRemove: THREE.Object3D[] = [];
+      scene.traverse((object) => {
+        if (object.userData.isGalleryCollider) {
+          objectsToRemove.push(object);
+        }
+      });
+      objectsToRemove.forEach((obj) => scene.remove(obj));
+    };
+  }, [galleryWorldId, scene]);
+
+  if (loading) {
+    return (
+      <Html center>
+        <div className="bg-black bg-opacity-75 text-white px-4 py-2 rounded">
+          Loading gallery environment...
+        </div>
+      </Html>
+    );
+  }
+
+  if (error || !panoramas) {
+    return (
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#90EE90" />
+      </mesh>
+    );
+  }
 
   return (
     <>
-      {/* Lighting */}
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 10, 5]} intensity={0.8} />
-      <pointLight position={[-10, -10, -5]} intensity={0.4} />
-
-      {/* Environment */}
-      {environmentTextureUrl ? (
-        <Suspense fallback={null}>
-          <EnvironmentSphere textureUrl={environmentTextureUrl} />
-        </Suspense>
-      ) : (
-        <>
-          <Sky sunPosition={[100, 20, 100]} />
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-            <planeGeometry args={[1000, 1000]} />
-            <meshStandardMaterial color="#90EE90" />
-          </mesh>
-        </>
-      )}
-
-      {/* Scene objects */}
-      {objects.map((obj) => (
-        <Suspense key={obj.id} fallback={<LoadingFallback />}>
-          <SceneObject3D 
-            object={obj} 
-            onDelete={onObjectDelete} 
-            onMove={handleObjectMove} 
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
+      {/* Panoramas for visual environment */}
+      <GalleryPanoramaRenderer panoramas={panoramas} />
+      
+      {/* Ground plane for navigation if no collision mesh */}
+      {!worldData?.generation_output.collider_mesh_url && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0, 0]}
+          receiveShadow
+        >
+          <planeGeometry args={[200, 200]} />
+          <meshStandardMaterial
+            transparent
+            opacity={0}
+            side={THREE.DoubleSide}
           />
-        </Suspense>
-      ))}
-
-      {/* Controls */}
-      <OrbitControls 
-        enableDamping
-        dampingFactor={0.05}
-        minDistance={1}
-        maxDistance={100}
-        enabled={!isAnyObjectDragging} //disable when dragging an object
-      />
-      <CameraController />
+        </mesh>
+      )}
     </>
   );
 }
 
 /**
+ * Main AR scene component
+ */
+function ARScene({
+  environmentTextureUrl,
+  galleryWorldId,
+  objects,
+  waypoints,
+  selectedObjectId,
+  onObjectSelect,
+  onObjectTransformChange,
+  onObjectDelete,
+  timeOfDay,
+  weather,
+  enablePhysics,
+}: {
+  environmentTextureUrl?: string;
+  galleryWorldId?: string;
+  objects: SceneObject[];
+  waypoints?: Array<{
+    id: string;
+    position: { x: number; y: number; z: number };
+    label: string;
+  }>;
+  selectedObjectId: string | null;
+  onObjectSelect: (id: string | null) => void;
+  onObjectTransformChange?: (
+    objectId: string,
+    transform: {
+      position?: { x: number; y: number; z: number };
+      rotation?: { x: number; y: number; z: number };
+      scale?: { x: number; y: number; z: number };
+    }
+  ) => void;
+  onObjectDelete?: (objectId: string) => void;
+  timeOfDay: TimeOfDay;
+  weather: WeatherType;
+  enablePhysics: boolean;
+}) {
+  const sceneContent = (
+    <>
+      {/* Environment Controller (Time of Day) */}
+      <EnvironmentController timeOfDay={timeOfDay} animated />
+
+      {/* Weather System */}
+      <WeatherSystem weather={weather} intensity={0.5} />
+
+      {/* Environment - Gallery or Standard */}
+      {galleryWorldId ? (
+        <Suspense fallback={null}>
+          <GalleryEnvironment galleryWorldId={galleryWorldId} />
+        </Suspense>
+      ) : environmentTextureUrl ? (
+        <Suspense fallback={null}>
+          <EnvironmentSphere textureUrl={environmentTextureUrl} />
+        </Suspense>
+      ) : (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+          <planeGeometry args={[100, 100]} />
+          <meshStandardMaterial color="#90EE90" />
+        </mesh>
+      )}
+
+      {/* Scene objects */}
+      {objects.map((obj) => (
+        <Suspense key={obj.id} fallback={<LoadingFallback />}>
+          <AnimatedObject
+            object={obj}
+            isSelected={selectedObjectId === obj.id}
+            onSelect={() => onObjectSelect(obj.id)}
+            onTransformChange={(transform) => {
+              if (onObjectTransformChange) {
+                onObjectTransformChange(obj.id, transform);
+              }
+            }}
+            onDelete={() => {
+              if (onObjectDelete) {
+                onObjectDelete(obj.id);
+              }
+            }}
+            enablePhysics={enablePhysics}
+          />
+        </Suspense>
+      ))}
+
+      {/* Waypoints */}
+      {waypoints && <Waypoints waypoints={waypoints} />}
+
+      {/* Visual Feedback Effects */}
+      <FeedbackEffects enableBloom enableVignette enableChromaticAberration={false} />
+    </>
+  );
+
+  // Wrap in physics if enabled
+  if (enablePhysics) {
+    return <PhysicsWorld>{sceneContent}</PhysicsWorld>;
+  }
+
+  return sceneContent;
+}
+
+/**
  * Audio player component
  */
-function AudioPlayer({ audioUrl }: { audioUrl: string }) {
+function AudioPlayer({ audioUrl, isPlaying }: { audioUrl?: string; isPlaying: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [playing, setPlaying] = useState(isPlaying);
 
   useEffect(() => {
-    if (audioRef.current) {
+    if (audioRef.current && audioUrl) {
+      setIsLoading(true);
       audioRef.current.src = audioUrl;
       audioRef.current.loop = true;
       audioRef.current.volume = 0.5;
+      
+      const handleCanPlay = () => setIsLoading(false);
+      const audio = audioRef.current;
+      audio.addEventListener("canplay", handleCanPlay);
+      
+      return () => {
+        audio.removeEventListener("canplay", handleCanPlay);
+      };
     }
   }, [audioUrl]);
 
-  const togglePlay = () => {
-    if (audioRef.current) {
+  useEffect(() => {
+    if (audioRef.current && audioUrl && !isLoading) {
       if (isPlaying) {
+        audioRef.current.play();
+        setPlaying(true);
+      } else {
+        audioRef.current.pause();
+        setPlaying(false);
+      }
+    }
+  }, [isPlaying, audioUrl, isLoading]);
+
+  const togglePlay = () => {
+    if (!audioUrl || isLoading) return;
+    
+    if (audioRef.current) {
+      if (playing) {
         audioRef.current.pause();
       } else {
         audioRef.current.play();
       }
-      setIsPlaying(!isPlaying);
+      setPlaying(!playing);
     }
   };
 
@@ -445,18 +522,15 @@ function AudioPlayer({ audioUrl }: { audioUrl: string }) {
       <audio ref={audioRef} />
       <button
         onClick={togglePlay}
-        className="bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-3 rounded-full transition-all"
-        title={isPlaying ? "Pause Music" : "Play Music"}
+        disabled={!audioUrl || isLoading}
+        className={`text-white p-3 rounded-full transition-all ${
+          !audioUrl || isLoading
+            ? "bg-gray-500 bg-opacity-50 cursor-not-allowed"
+            : "bg-black bg-opacity-50 hover:bg-opacity-75 cursor-pointer"
+        }`}
+        title={playing ? "Pause Scene Audio" : "Play Scene Audio"}
       >
-        {isPlaying ? (
-          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
-        ) : (
-          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-          </svg>
-        )}
+        {playing ? "⏸" : "▶"}
       </button>
     </div>
   );
@@ -467,39 +541,150 @@ function AudioPlayer({ audioUrl }: { audioUrl: string }) {
  */
 export default function ARViewer({
   environmentTextureUrl,
+  galleryWorldId,
   objects,
   audioUrl,
-  onObjectMove,
+  waypoints,
+  sceneContext,
+  onObjectUpdate,
   onObjectDelete,
 }: ARViewerProps) {
+  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+  const [cameraMode, setCameraMode] = useState<CameraMode>("first-person");
+  const [isAudioPlaying] = useState(false);
+  const [playerPosition, setPlayerPosition] = useState({ x: 0, z: 0 });
+  const [isPointerLocked, setIsPointerLocked] = useState(false);
+  const canvasRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Deselect object when clicking empty space
+   */
+  const handleCanvasClick = () => {
+    if (selectedObjectId) {
+      setSelectedObjectId(null);
+    }
+  };
+
+  /**
+   * Get selected object
+   */
+  const selectedObject = objects.find((obj) => obj.id === selectedObjectId);
+
   return (
     <div className="relative w-full h-screen">
+      {/* Click to start prompt - only show when not in pointer lock */}
+      {!isPointerLocked && cameraMode === "first-person" && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+          <div className="bg-black bg-opacity-75 text-white px-6 py-4 rounded-lg text-center">
+            <p className="text-lg font-semibold">Click the Scene to Enter 3D World</p>
+            <p className="text-sm mt-2">WASD - Move | Mouse - Look Around | Shift - Sprint</p>
+            <p className="text-xs mt-1 opacity-75">Press ESC to exit | Tab to switch camera</p>
+          </div>
+        </div>
+      )}
+
       {/* Controls hint */}
-      <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-4 py-2 rounded">
-        <p className="font-semibold mb-1 font-caveat-brush">Controls:</p>
-        <p className="text-sm font-serif">WASD - Move | Mouse - Look | E/Q - Up/Down</p>
-        <p className="text-sm mt-1 font-serif">Hover over objects to delete them</p>
-        <p className="text-sm mt-1 font-serif">Drag to move objects</p>
+      <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-4 py-2 rounded pointer-events-auto">
+        <p className="font-semibold mb-1">Navigation:</p>
+        <p className="text-sm">WASD - Move | Shift - Sprint | Space - Jump</p>
+        <p className="text-sm">Mouse - Look | Tab - Camera Mode | ESC - Exit</p>
+      </div>
+
+      {/* Camera Mode HUD */}
+      <div className="pointer-events-auto">
+        <CameraModeHUD mode={cameraMode} />
       </div>
 
       {/* 3D Canvas */}
-      <Canvas
-        camera={{ position: [0, 1.6, 5], fov: 75 }}
-        gl={{ antialias: true }}
-      >
-        <Suspense fallback={<LoadingFallback />}>
-          <ARScene
-            environmentTextureUrl={environmentTextureUrl}
-            objects={objects}
-            onObjectDelete={onObjectDelete}
-            onObjectMove={onObjectMove}
-          />
-        </Suspense>
-      </Canvas>
+      <div ref={canvasRef} className="w-full h-full">
+        <Canvas
+          camera={{ position: [0, 1.6, 5], fov: 75 }}
+          gl={{ antialias: true }}
+          shadows
+          onClick={handleCanvasClick}
+        >
+          <Suspense fallback={<LoadingFallback />}>
+            <ARScene
+              environmentTextureUrl={environmentTextureUrl}
+              galleryWorldId={galleryWorldId}
+              objects={objects}
+              waypoints={waypoints}
+              selectedObjectId={selectedObjectId}
+              onObjectSelect={setSelectedObjectId}
+              onObjectTransformChange={onObjectUpdate}
+              onObjectDelete={onObjectDelete}
+              timeOfDay="noon"
+              weather="clear"
+              enablePhysics={false}
+            />
+          </Suspense>
 
-      {/* Audio player */}
-      {audioUrl && <AudioPlayer audioUrl={audioUrl} />}
+          {/* Camera Controller */}
+          <CameraController mode={cameraMode} onModeChange={setCameraMode} />
+
+          {/* First Person Controls */}
+          {cameraMode === "first-person" && (
+            <>
+              <TrackedPointerLockControls
+                onLock={() => setIsPointerLocked(true)}
+                onUnlock={() => setIsPointerLocked(false)}
+              />
+              <FirstPersonController
+                enabled={cameraMode === "first-person"}
+                onPositionChange={setPlayerPosition}
+              />
+            </>
+          )}
+
+          {/* Spatial Audio (3D positioned) */}
+          <AmbientAudioManager audioUrl={audioUrl} isPlaying={isAudioPlaying} volume={0.5} />
+        </Canvas>
+      </div>
+
+      {/* Object Inspector Panel */}
+      <div className="pointer-events-auto">
+        {selectedObject && (
+          <ObjectInspector
+            object={selectedObject}
+            onClose={() => setSelectedObjectId(null)}
+            onUpdate={(objectId, transform) => {
+              if (onObjectUpdate) {
+                onObjectUpdate(objectId, transform);
+              }
+            }}
+            onDelete={(objectId) => {
+              if (onObjectDelete) {
+                onObjectDelete(objectId);
+                setSelectedObjectId(null);
+              }
+            }}
+          />
+        )}
+      </div>
+
+      {/* Minimap */}
+      <div className="pointer-events-auto">
+        {waypoints && waypoints.length > 0 && (
+          <Minimap waypoints={waypoints} playerPosition={playerPosition} />
+        )}
+      </div>
+
+      {/* Audio player - always visible */}
+      <div className="pointer-events-auto">
+        <AudioPlayer audioUrl={audioUrl} isPlaying={isAudioPlaying} />
+      </div>
+
+      {/* AI Chat Assistant */}
+      <div className="pointer-events-auto">
+        <SceneChat
+          sceneContext={{
+            environmentType: sceneContext?.environmentType,
+            mood: sceneContext?.mood,
+            locationName: sceneContext?.locationName,
+            objects: objects.map((obj) => ({ name: obj.name })),
+          }}
+        />
+      </div>
     </div>
   );
 }
-

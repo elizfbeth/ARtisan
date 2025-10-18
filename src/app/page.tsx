@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import PhotoUpload from "@/components/PhotoUpload";
 import ARViewer from "@/components/ARViewer";
 import DoodlePad from "@/components/DoodlePad";
+import GalleryTemplateBrowser from "@/components/GalleryTemplateBrowser";
 
 /**
  * ARtisan Main Application Page
@@ -24,6 +25,7 @@ export default function Home() {
   const [currentSceneId, setCurrentSceneId] = useState<Id<"scenes"> | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isGalleryBrowserOpen, setIsGalleryBrowserOpen] = useState(false);
 
   // Subscribe to scene updates in real-time
   const scene = useQuery(
@@ -105,54 +107,53 @@ export default function Home() {
   };
 
   /**
-   * Handle regenerating music
+   * Handle regenerating scene audio
    */
-  const handleRegenerateMusic = async () => {
+  const handleRegenerateAudio = async () => {
     if (!currentSceneId) return;
     
     try {
-      await fetch("/api/workflows/compose-music", {
+      await fetch("/api/workflows/generate-scene-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sceneId: currentSceneId }),
       });
     } catch (error) {
-      console.error("Music regeneration error:", error);
+      console.error("Audio regeneration error:", error);
     }
   };
 
   /**
-   * Handle deleting an object from the scene
+   * Handle gallery template selection
    */
-  const handleDeleteObject = useMutation(api.scenes.deleteObject);
-
-  const deleteObject = async (objectId: string) => {
-    if (!currentSceneId) return;
-    
+  const handleGallerySelect = async (worldId: string) => {
     try {
-      await handleDeleteObject({
-        sceneId: currentSceneId,
-        objectId,
+      // Create scene via API with gallery template
+      const response = await fetch("/api/workflows/create-scene", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          environmentSource: "gallery-template",
+          galleryWorldId: worldId,
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error("Failed to create scene with gallery template");
+      }
+
+      const result = await response.json();
+      
+      // Set scene ID and transition to processing state
+      setCurrentSceneId(result.sceneId);
+      setAppState("processing");
+      
     } catch (error) {
-      console.error("Delete object error:", error);
-      alert("Failed to delete object. Please try again.");
+      console.error("Gallery template error:", error);
+      alert("Failed to load gallery template. Please try again.");
     }
   };
 
-  /**
-   * Handle moving an object in the scene
-   */
-  const handleMoveObject = useMutation(api.scenes.updateObject);
-  const moveObject = async (objectId: string, position: { x: number; y: number; z: number }) => {
-    if (!currentSceneId) return;
-    
-    try {
-      await handleMoveObject({ sceneId: currentSceneId, objectId, position });
-    } catch (error) {
-      console.error("Move object error:", error);
-    }
-  };
   /**
    * Handle returning to upload
    */
@@ -205,9 +206,39 @@ export default function Home() {
                 Then bring your imagination to life by adding your own creations!
               </p>
             </div>
+            
+            {/* Photo upload */}
             <PhotoUpload onUpload={handlePhotoUpload} isUploading={isUploading} />
+            
+            {/* Divider */}
+            <div className="flex items-center gap-4 my-8 w-full max-w-md">
+              <div className="flex-1 h-px bg-gray-300"></div>
+              <span className="text-gray-500 text-sm font-medium">OR</span>
+              <div className="flex-1 h-px bg-gray-300"></div>
+            </div>
+            
+            {/* Gallery template browser button */}
+            <button
+              onClick={() => setIsGalleryBrowserOpen(true)}
+              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-3"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-left">
+                <div className="font-semibold">Browse our (GROWING) Gallery</div>
+                <div className="text-xs opacity-90">Choose from pre-made immersive worlds</div>
+              </div>
+            </button>
           </div>
         )}
+        
+        {/* Gallery Template Browser Modal */}
+        <GalleryTemplateBrowser
+          isOpen={isGalleryBrowserOpen}
+          onClose={() => setIsGalleryBrowserOpen(false)}
+          onSelectWorld={handleGallerySelect}
+        />
 
         {appState === "processing" && (
           <div className="flex flex-col items-center justify-center min-h-[70vh]">
@@ -262,6 +293,7 @@ export default function Home() {
             <div className="rounded-lg overflow-hidden shadow-2xl">
               <ARViewer
                 environmentTextureUrl={scene.environmentTextureUrl}
+                galleryWorldId={scene.galleryWorldId || (scene as any).worldLabsWorldId}
                 objects={scene.objects.map((obj) => ({
                   id: obj.id,
                   name: obj.name,
@@ -269,10 +301,23 @@ export default function Home() {
                   position: obj.position,
                   rotation: obj.rotation,
                   scale: obj.scale,
+                  createdAt: obj.createdAt,
                 }))}
                 audioUrl={scene.audioUrl}
-                onObjectDelete={deleteObject}
-                onObjectMove={moveObject}
+                waypoints={scene.waypoints}
+                sceneContext={{
+                  environmentType: scene.analysis?.environmentType,
+                  mood: scene.analysis?.mood,
+                  locationName: scene.analysis?.location?.locationName,
+                }}
+                onObjectUpdate={async (objectId, transform) => {
+                  // TODO: Implement real-time object update via Convex
+                  console.log("Object updated:", objectId, transform);
+                }}
+                onObjectDelete={async (objectId) => {
+                  // TODO: Implement object deletion via Convex
+                  console.log("Object deleted:", objectId);
+                }}
               />
             </div>
 
@@ -321,10 +366,10 @@ export default function Home() {
                   </h3>
                   <div className="space-y-2">
                     <button
-                      onClick={handleRegenerateMusic}
+                      onClick={handleRegenerateAudio}
                       className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-caveat-brush"
                     >
-                      🎵 Recompose Soundtrack
+                      🔊 Regenerate Scene Audio
                     </button>
                   </div>
                 </div>

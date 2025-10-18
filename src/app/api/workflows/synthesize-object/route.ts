@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
         id: result.objectId,
         name: result.name,
         modelUrl: result.modelUrl,
+        modelType: result.modelType,
         storagePath: result.storagePath,
         position: result.position,
         rotation: result.rotation,
@@ -78,14 +79,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (updatedScene && updatedScene.objects.length % 3 === 0 && updatedScene.objects.length > 0) {
-      // Regenerate music after every 3 objects
-      console.log("Triggering music regeneration...");
+      // Regenerate scene audio after every 3 objects
+      console.log("Triggering scene audio regeneration...");
       try {
-        await convex.action(api.workflows.composeMusicWorkflow, {
+        await convex.action(api.workflows.generateSceneAudioWorkflow, {
           sceneId,
         });
       } catch (error) {
-        console.error("Music regeneration failed (non-critical):", error);
+        console.error("Scene audio regeneration failed (non-critical):", error);
       }
     }
 
