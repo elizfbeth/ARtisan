@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { executeMusicComposition } from "@/lib/workflows/composeMusic";
+import { executeSceneAudioGeneration } from "@/lib/workflows/generateSceneAudio";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 
 /**
- * Music Composition Workflow API Route
+ * Scene Audio Generation Workflow API Route
  * 
- * Creates adaptive AI-generated soundtrack for the AR scene:
+ * Creates realistic ambient soundscapes for AR scenes:
  * - Analyzes scene state with Groq
- * - Generates music with ElevenLabs
+ * - Generates realistic ambient audio with ElevenLabs
  * - Updates scene audio in Convex
  */
 
@@ -17,7 +17,7 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sceneId, environmentType, mood, objectCount } = body;
+    const { sceneId, environmentType, mood, objectCount, objects } = body;
 
     if (!sceneId) {
       return NextResponse.json(
@@ -26,12 +26,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("Starting music composition workflow:", sceneId);
+    console.log("Starting scene audio generation workflow:", sceneId);
 
     // Get scene data if not provided
     let finalEnvironmentType = environmentType;
     let finalMood = mood;
     let finalObjectCount = objectCount;
+    let finalObjects = objects;
 
     if (!environmentType || !mood) {
       const scene = await convex.query(api.scenes.getScene, {
@@ -48,17 +49,19 @@ export async function POST(request: NextRequest) {
       finalEnvironmentType = scene.analysis?.environmentType || "ambient";
       finalMood = scene.analysis?.mood || "calm";
       finalObjectCount = scene.objects.length || 0;
+      finalObjects = scene.objects || [];
     }
 
-    // Execute the music composition workflow
-    const result = await executeMusicComposition({
+    // Execute the scene audio generation workflow
+    const result = await executeSceneAudioGeneration({
       sceneId,
       environmentType: finalEnvironmentType,
       mood: finalMood,
       objectCount: finalObjectCount,
+      objects: finalObjects,
     });
 
-    console.log("Music composition complete:", result);
+    console.log("Scene audio generation complete:", result);
 
     // Update scene audio in Convex
     await convex.mutation(api.scenes.updateAudio, {
@@ -73,7 +76,7 @@ export async function POST(request: NextRequest) {
       result,
     });
   } catch (error) {
-    console.error("Music composition workflow error:", error);
+    console.error("Scene audio generation workflow error:", error);
 
     return NextResponse.json(
       {
@@ -83,4 +86,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

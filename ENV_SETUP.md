@@ -3,6 +3,9 @@
 Create a `.env.local` file in the project root with the following variables:
 
 ```bash
+# Application
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
 # Convex
 NEXT_PUBLIC_CONVEX_URL=
 
@@ -18,8 +21,6 @@ GROQ_API_KEY=
 ELEVENLABS_API_KEY=
 MANUS_API_KEY=
 MEM0_API_KEY=
-
-# Optional
 EXA_API_KEY=
 ```
 
@@ -33,6 +34,7 @@ EXA_API_KEY=
 6. **ElevenLabs**: Get key from https://elevenlabs.io/
 7. **Manus AI**: Sign up at https://www.manus.ai/
 8. **Mem0**: Get key from https://mem0.ai/
+9. **Exa AI**: Get key from https://exa.ai/ (for location intelligence)
 
 ## Quick Setup
 

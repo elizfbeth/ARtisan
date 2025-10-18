@@ -47,7 +47,28 @@ export default defineSchema({
       depthPerspective: v.string(),
       colorPalette: v.array(v.string()),
       mood: v.string(),
+      location: v.optional(v.object({
+        hasLocation: v.boolean(),
+        locationName: v.string(),
+        locationType: v.string(),
+        locationKeywords: v.array(v.string()),
+      })),
     })),
+    
+    // Location context from Exa AI
+    locationContext: v.optional(v.object({
+      description: v.string(),
+      facts: v.array(v.string()),
+      atmosphere: v.string(),
+      historicalContext: v.string(),
+    })),
+    
+    // Waypoints for Street View navigation
+    waypoints: v.optional(v.array(v.object({
+      id: v.string(),
+      position: v.object({ x: v.number(), y: v.number(), z: v.number() }),
+      label: v.string(),
+    }))),
     
     // Generated environment
     environmentTextureUrl: v.optional(v.string()),

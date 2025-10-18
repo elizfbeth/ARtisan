@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -105,19 +105,19 @@ export default function Home() {
   };
 
   /**
-   * Handle regenerating music
+   * Handle regenerating scene audio
    */
-  const handleRegenerateMusic = async () => {
+  const handleRegenerateAudio = async () => {
     if (!currentSceneId) return;
     
     try {
-      await fetch("/api/workflows/compose-music", {
+      await fetch("/api/workflows/generate-scene-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sceneId: currentSceneId }),
       });
     } catch (error) {
-      console.error("Music regeneration error:", error);
+      console.error("Audio regeneration error:", error);
     }
   };
 
@@ -237,8 +237,23 @@ export default function Home() {
                   position: obj.position,
                   rotation: obj.rotation,
                   scale: obj.scale,
+                  createdAt: obj.createdAt,
                 }))}
                 audioUrl={scene.audioUrl}
+                waypoints={scene.waypoints}
+                sceneContext={{
+                  environmentType: scene.analysis?.environmentType,
+                  mood: scene.analysis?.mood,
+                  locationName: scene.analysis?.location?.locationName,
+                }}
+                onObjectUpdate={async (objectId, transform) => {
+                  // TODO: Implement real-time object update via Convex
+                  console.log("Object updated:", objectId, transform);
+                }}
+                onObjectDelete={async (objectId) => {
+                  // TODO: Implement object deletion via Convex
+                  console.log("Object deleted:", objectId);
+                }}
               />
             </div>
 
@@ -287,10 +302,10 @@ export default function Home() {
                   </h3>
                   <div className="space-y-2">
                     <button
-                      onClick={handleRegenerateMusic}
+                      onClick={handleRegenerateAudio}
                       className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
                     >
-                      🎵 Recompose Soundtrack
+                      🔊 Regenerate Scene Audio
                     </button>
                   </div>
                 </div>

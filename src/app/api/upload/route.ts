@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { uploadFile } from "@/lib/supabase";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 /**
  * Photo Upload API Route
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const scene = await convex.query(api.scenes.getScene, {
-      sceneId: sceneId as any, // Type assertion for ID
+      sceneId: sceneId as Id<"scenes">, // Type assertion for ID
     });
 
     return NextResponse.json({

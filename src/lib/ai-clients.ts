@@ -75,30 +75,28 @@ export async function describeObjectWithGemini(
 ): Promise<string> {
   const model = getGeminiClient();
   
-  let prompt = "";
-  const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-  
   if (inputType === "text") {
-    prompt = `Convert this description into a detailed 3D object prompt suitable for 3D model generation. Include: shape, style, colors, materials, and key features. Keep it concise but descriptive.\n\nInput: ${inputData}\n\nDetailed 3D prompt:`;
-    parts.push({ text: prompt });
+    const prompt = `Convert this description into a detailed 3D object prompt suitable for 3D model generation. Include: shape, style, colors, materials, and key features. Keep it concise but descriptive.\n\nInput: ${inputData}\n\nDetailed 3D prompt:`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
   } else {
-    // For sketch or photo
-    prompt = `Describe this ${inputType === "sketch" ? "sketch" : "object"} as a detailed 3D object. Include: shape, style, colors, materials, and key features. Format it as a prompt suitable for 3D model generation.`;
+    // For sketch or photo - use multimodal input
+    const prompt = `Describe this ${inputType === "sketch" ? "sketch" : "object"} as a detailed 3D object. Include: shape, style, colors, materials, and key features. Format it as a prompt suitable for 3D model generation.`;
     
-    parts.push(
+    const result = await model.generateContent([
       { text: prompt },
       {
         inlineData: {
           mimeType: "image/png",
           data: inputData.split(",")[1] || inputData, // Remove data URL prefix if present
         },
-      }
-    );
+      },
+    ]);
+    
+    const response = await result.response;
+    return response.text();
   }
-  
-  const result = await model.generateContent(parts);
-  const response = await result.response;
-  return response.text();
 }
 
 // ============================================================================
@@ -192,27 +190,37 @@ export function getGroqClient() {
 }
 
 /**
- * Generate music prompt based on scene analysis
+ * Generate realistic ambient sound prompt based on scene analysis
  */
-export async function generateMusicPromptWithGroq(
+export async function generateAudioPromptWithGroq(
   environmentType: string,
   mood: string,
-  objectCount: number
+  objectCount: number,
+  objects?: string[]
 ): Promise<string> {
   const groq = getGroqClient();
   
-  const prompt = `Generate a music prompt for an AI composer based on this scene:
+  const objectList = objects && objects.length > 0 
+    ? `\n- Objects in scene: ${objects.join(", ")}`
+    : "";
+  
+  const prompt = `Generate a realistic ambient sound prompt for an AI sound generator based on this scene:
 - Environment: ${environmentType}
 - Mood: ${mood}
-- Number of objects: ${objectCount}
+- Number of objects: ${objectCount}${objectList}
 
-Create a concise prompt (2-3 sentences) describing the ideal background music. Include genre, instruments, tempo, and atmosphere.`;
+Create a concise prompt (2-3 sentences) describing the realistic ambient sounds that would be heard in this scene. Focus on:
+1. Environmental sounds (wind, water, nature, city sounds, etc.)
+2. Object-specific sounds if relevant (e.g., if there's a fountain, include water sounds; if there's traffic, include car sounds)
+3. Atmospheric layers that create immersion
+
+Do NOT include any musical elements, instruments, tempo, or melody. Only describe natural, realistic sound effects.`;
 
   const completion = await groq.chat.completions.create({
     messages: [
       {
         role: "system",
-        content: "You are a music director helping compose soundtracks for AR experiences.",
+        content: "You are a sound designer creating realistic ambient soundscapes for AR experiences. Focus on natural environmental sounds and sound effects, never music.",
       },
       {
         role: "user",
@@ -227,34 +235,140 @@ Create a concise prompt (2-3 sentences) describing the ideal background music. I
   return completion.choices[0]?.message?.content || "";
 }
 
+/**
+ * Generate chat response with scene context using Groq
+ */
+export async function generateChatResponse(
+  userMessage: string,
+  sceneContext?: {
+    environmentType?: string;
+    mood?: string;
+    locationName?: string;
+    objects: Array<{ name: string }>;
+  },
+  history?: Array<{ role: string; content: string }>
+): Promise<string> {
+  const groq = getGroqClient();
+
+  // Build context-aware system prompt
+  let systemPrompt = "You are a helpful AR scene assistant. You help users understand and interact with their 3D AR environments.";
+
+  if (sceneContext) {
+    systemPrompt += `\n\nCurrent Scene Context:`;
+    if (sceneContext.environmentType) {
+      systemPrompt += `\n- Environment: ${sceneContext.environmentType}`;
+    }
+    if (sceneContext.mood) {
+      systemPrompt += `\n- Mood: ${sceneContext.mood}`;
+    }
+    if (sceneContext.locationName) {
+      systemPrompt += `\n- Location: ${sceneContext.locationName}`;
+    }
+    if (sceneContext.objects.length > 0) {
+      systemPrompt += `\n- Objects: ${sceneContext.objects.map((o) => o.name).join(", ")}`;
+    }
+  }
+
+  systemPrompt += "\n\nYou can help with:\n- Information about the scene and its elements\n- How to interact with objects (press G to move, R to rotate, S to scale, X to delete)\n- Camera controls (Tab to switch modes, WASD to move)\n- Historical or contextual information about locations\n- Creative suggestions for enhancing the scene";
+
+  // Build messages array
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: systemPrompt },
+  ];
+
+  // Add history
+  if (history && history.length > 0) {
+    history.forEach((msg) => {
+      if (msg.role === "user" || msg.role === "assistant") {
+        messages.push({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+        });
+      }
+    });
+  }
+
+  // Add current message
+  messages.push({ role: "user", content: userMessage });
+
+  const completion = await groq.chat.completions.create({
+    messages,
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.8,
+    max_tokens: 500,
+  });
+
+  return completion.choices[0]?.message?.content || "I'm not sure how to respond to that.";
+}
+
 // ============================================================================
 // ElevenLabs Client
 // ============================================================================
 
 /**
- * Generate music with ElevenLabs
+ * Generate realistic ambient audio with ElevenLabs Sound Generation API
+ * Note: This API is designed for sound effects and ambient sounds, NOT music
+ * 
+ * API Documentation: https://elevenlabs.io/docs/api-reference/sound-generation
+ * 
+ * IMPORTANT: Verify the correct endpoint and parameters with ElevenLabs documentation.
+ * The sound-generation endpoint may require specific API access or different parameters.
  */
-export async function generateMusicWithElevenLabs(prompt: string): Promise<ArrayBuffer> {
+export async function generateAudioWithElevenLabs(prompt: string): Promise<ArrayBuffer> {
   if (!process.env.ELEVENLABS_API_KEY) {
     throw new Error("Missing ELEVENLABS_API_KEY environment variable");
   }
   
-  // Use ElevenLabs Sound Generation API
+  // Validate prompt length (ElevenLabs has limits - typically 1000 chars)
+  const truncatedPrompt = prompt.length > 1000 ? prompt.slice(0, 1000) : prompt;
+  
+  // Construct request body for ElevenLabs Sound Generation API
+  // Based on ElevenLabs API v1 specification
+  const requestBody = {
+    text: truncatedPrompt,
+    duration_seconds: 22, // ElevenLabs supports durations between 0.5 and 22 seconds
+    prompt_influence: 0.3, // Range: 0.0 to 1.0 (lower = more realistic, higher = more creative)
+  };
+  
+  console.log("ElevenLabs API request:", { 
+    endpoint: "sound-generation",
+    promptLength: truncatedPrompt.length,
+    duration: 22,
+    promptInfluence: 0.3,
+  });
+  
   const response = await fetch("https://api.elevenlabs.io/v1/sound-generation", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "xi-api-key": process.env.ELEVENLABS_API_KEY,
     },
-    body: JSON.stringify({
-      text: prompt,
-      duration_seconds: 30,
-      prompt_influence: 0.7,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
-    throw new Error(`ElevenLabs API error: ${response.statusText}`);
+    // Read error response for debugging
+    const errorText = await response.text();
+    console.error("ElevenLabs API error response:", {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText,
+      requestBody,
+    });
+    
+    // Provide helpful error message based on status code
+    let errorMessage = `ElevenLabs API error: ${response.status} ${response.statusText}`;
+    if (response.status === 400) {
+      errorMessage += " - Check if your API key has access to the Sound Generation endpoint and verify the request parameters.";
+    } else if (response.status === 401) {
+      errorMessage += " - Invalid API key. Please check your ELEVENLABS_API_KEY environment variable.";
+    } else if (response.status === 404) {
+      errorMessage += " - The sound-generation endpoint may not be available. Check ElevenLabs API documentation for the correct endpoint.";
+    } else if (response.status === 429) {
+      errorMessage += " - Rate limit exceeded. Please try again later.";
+    }
+    
+    throw new Error(errorMessage);
   }
 
   return response.arrayBuffer();

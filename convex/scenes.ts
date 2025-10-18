@@ -4,7 +4,7 @@ import { Id } from "./_generated/dataModel";
 
 /**
  * Convex Scene Operations
- * 
+ *
  * Provides CRUD operations for AR scenes with real-time updates
  */
 
@@ -27,7 +27,7 @@ export const createScene = mutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
-    
+
     return sceneId;
   },
 });
@@ -54,11 +54,38 @@ export const updateAnalysis = mutation({
       depthPerspective: v.string(),
       colorPalette: v.array(v.string()),
       mood: v.string(),
+      location: v.optional(
+        v.object({
+          hasLocation: v.boolean(),
+          locationName: v.string(),
+          locationType: v.string(),
+          locationKeywords: v.array(v.string()),
+        })
+      ),
     }),
+    locationContext: v.optional(
+      v.object({
+        description: v.string(),
+        facts: v.array(v.string()),
+        atmosphere: v.string(),
+        historicalContext: v.string(),
+      })
+    ),
+    waypoints: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          position: v.object({ x: v.number(), y: v.number(), z: v.number() }),
+          label: v.string(),
+        })
+      )
+    ),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.sceneId, {
       analysis: args.analysis,
+      locationContext: args.locationContext,
+      waypoints: args.waypoints,
       status: "generating",
       updatedAt: Date.now(),
     });
@@ -108,7 +135,7 @@ export const addObject = mutation({
     if (!scene) {
       throw new Error("Scene not found");
     }
-    
+
     const updatedObjects = [...scene.objects, args.object];
     await ctx.db.patch(args.sceneId, {
       objects: updatedObjects,
@@ -124,16 +151,22 @@ export const updateObject = mutation({
   args: {
     sceneId: v.id("scenes"),
     objectId: v.string(),
-    position: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
-    rotation: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
-    scale: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
+    position: v.optional(
+      v.object({ x: v.number(), y: v.number(), z: v.number() })
+    ),
+    rotation: v.optional(
+      v.object({ x: v.number(), y: v.number(), z: v.number() })
+    ),
+    scale: v.optional(
+      v.object({ x: v.number(), y: v.number(), z: v.number() })
+    ),
   },
   handler: async (ctx, args) => {
     const scene = await ctx.db.get(args.sceneId);
     if (!scene) {
       throw new Error("Scene not found");
     }
-    
+
     const updatedObjects = scene.objects.map((obj) => {
       if (obj.id === args.objectId) {
         return {
@@ -145,7 +178,7 @@ export const updateObject = mutation({
       }
       return obj;
     });
-    
+
     await ctx.db.patch(args.sceneId, {
       objects: updatedObjects,
       updatedAt: Date.now(),
@@ -211,12 +244,9 @@ export const listScenes = query({
           .query("scenes")
           .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       : ctx.db.query("scenes");
-    
-    const scenes = await query
-      .order("desc")
-      .take(args.limit || 20);
-    
+
+    const scenes = await query.order("desc").take(args.limit || 20);
+
     return scenes;
   },
 });
-
