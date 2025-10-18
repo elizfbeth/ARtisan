@@ -335,9 +335,15 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
       </div>
 
       {isSynthesizing && (
-        <div className="text-center">
-          <p className="text-sm text-gray-600 animate-pulse">
-            Creating your 3D object with AI magic... ✨
+        <div className="text-center space-y-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="text-sm font-semibold text-blue-800 animate-pulse">
+            Creating your true 3D model with Meshy AI... ✨
+          </p>
+          <p className="text-xs text-blue-600">
+            This may take 30-60 seconds for high-quality 3D geometry
+          </p>
+          <p className="text-xs text-gray-500">
+            Tip: Grab a coffee while the AI crafts your masterpiece!
           </p>
         </div>
       )}

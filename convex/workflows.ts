@@ -96,10 +96,10 @@ export const synthesizeObjectWorkflow = action({
 });
 
 /**
- * Trigger music composition workflow
- * This orchestrates: Scene analysis → Music prompt generation → ElevenLabs generation
+ * Trigger scene audio generation workflow
+ * This orchestrates: Scene analysis → Ambient sound prompt generation → ElevenLabs generation
  */
-export const composeMusicWorkflow = action({
+export const generateSceneAudioWorkflow = action({
   args: {
     sceneId: v.id("scenes"),
   },
@@ -114,8 +114,8 @@ export const composeMusicWorkflow = action({
         throw new Error("Scene not found");
       }
 
-      // Call the music composition workflow endpoint
-      const response: Response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/workflows/compose-music`, {
+      // Call the scene audio generation workflow endpoint
+      const response: Response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/workflows/generate-scene-audio`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -123,17 +123,18 @@ export const composeMusicWorkflow = action({
           environmentType: (scene as { analysis?: { environmentType?: string } }).analysis?.environmentType,
           mood: (scene as { analysis?: { mood?: string } }).analysis?.mood,
           objectCount: (scene as { objects: unknown[] }).objects.length,
+          objects: (scene as { objects: unknown[] }).objects,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Music composition failed: ${response.statusText}`);
+        throw new Error(`Scene audio generation failed: ${response.statusText}`);
       }
 
       const result: unknown = await response.json();
       return { success: true, result };
     } catch (error) {
-      console.error("Music composition error:", error);
+      console.error("Scene audio generation error:", error);
       throw error;
     }
   },

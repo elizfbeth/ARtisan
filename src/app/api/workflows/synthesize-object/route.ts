@@ -57,30 +57,37 @@ export async function POST(request: NextRequest) {
 
     console.log("Object synthesis complete:", result);
 
-    // Add object to scene in Convex (with timeout handling)
-    try {
-      await Promise.race([
-        convex.mutation(api.scenes.addObject, {
+    // Add object to scene in Convex
+    await convex.mutation(api.scenes.addObject, {
+      sceneId,
+      object: {
+        id: result.objectId,
+        name: result.name,
+        modelUrl: result.modelUrl,
+        modelType: result.modelType,
+        storagePath: result.storagePath,
+        position: result.position,
+        rotation: result.rotation,
+        scale: result.scale,
+        createdAt: Date.now(),
+      },
+    });
+
+    // Check if we should regenerate music
+    const updatedScene = await convex.query(api.scenes.getScene, {
+      sceneId,
+    });
+
+    if (updatedScene && updatedScene.objects.length % 3 === 0 && updatedScene.objects.length > 0) {
+      // Regenerate scene audio after every 3 objects
+      console.log("Triggering scene audio regeneration...");
+      try {
+        await convex.action(api.workflows.generateSceneAudioWorkflow, {
           sceneId,
-          object: {
-            id: result.objectId,
-            name: result.name,
-            modelUrl: result.modelUrl,
-            storagePath: result.storagePath,
-            position: result.position,
-            rotation: result.rotation,
-            scale: result.scale,
-            createdAt: Date.now(),
-          },
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Convex mutation timeout")), 10000)
-        )
-      ]);
-      console.log("✓ Object added to scene in Convex");
-    } catch (convexError) {
-      console.warn("⚠ Failed to add object to Convex, but object was created:", convexError);
-      // Continue - object was created even if Convex update failed
+        });
+      } catch (error) {
+        console.error("Scene audio regeneration failed (non-critical):", error);
+      }
     }
 
     // Skip music regeneration to avoid additional timeouts

@@ -3,34 +3,64 @@ import {
   generateEnvironmentWithFal,
 } from "../ai-clients";
 import { uploadFromUrl } from "../supabase";
+import {
+  fetchWorldDetails,
+  getBest3DFormat,
+  getPanoramaUrls,
+  GalleryWorld,
+} from "../gallery";
 
 /**
- * Scene Creation Workflow
+ * Scene Creation Workflow - Enhanced with Location Intelligence & Gallery Templates
  * 
  * Orchestrates the transformation of a user photo into an AR environment:
- * 1. Analyze photo with Gemini 2.5 Flash
- * 2. Generate environment texture with fal.ai
- * 3. Store assets in Supabase
+ * 1. Analyze photo with Gemini 2.5 Flash (includes location detection)
+ * 2. Search for location-specific information using Exa AI
+ * 3. Generate enhanced environment texture with fal.ai OR use Gallery template
+ * 4. Store assets in Supabase
  * 
  * This workflow is typically triggered via Manus AI orchestration
  */
 
+export type EnvironmentSource = "generate" | "gallery-template";
+
 export interface SceneCreationInput {
-  photoUrl: string;
+  photoUrl?: string;
   sceneId: string;
+  environmentSource?: EnvironmentSource;
+  galleryWorldId?: string;
 }
 
 export interface SceneCreationResult {
-  analysis: {
+  analysis?: {
     environmentType: string;
     keyObjects: string[];
     depthPerspective: string;
     colorPalette: string[];
     mood: string;
+    location?: {
+      hasLocation: boolean;
+      locationName: string;
+      locationType: string;
+      locationKeywords: string[];
+    };
+  };
+  locationContext?: {
+    description: string;
+    facts: string[];
+    atmosphere: string;
+    historicalContext: string;
   };
   environmentTextureUrl: string;
   environmentStoragePath: string;
-  environmentType: "panorama" | "skybox";
+  environmentType: "panorama" | "skybox" | "gallery";
+  galleryWorldId?: string;
+  galleryData?: GalleryWorld;
+  waypoints?: Array<{
+    id: string;
+    position: { x: number; y: number; z: number };
+    label: string;
+  }>;
 }
 
 /**
@@ -68,9 +98,11 @@ export async function executeSceneCreation(
 
   return {
     analysis,
+    locationContext,
     environmentTextureUrl,
     environmentStoragePath,
     environmentType: "panorama",
+    waypoints,
   };
 }
 
