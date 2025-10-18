@@ -67,7 +67,6 @@ export const updateAnalysis = mutation({
       // Landmark detection
       isLandmark: v.optional(v.boolean()),
       landmarkName: v.optional(v.union(v.string(), v.null())),
-      location: v.optional(v.union(v.string(), v.null())),
       landmarkConfidence: v.optional(v.number()),
       // Extended detailed analysis (optional, for enhanced workflow)
       lightingConditions: v.optional(v.string()),

@@ -88,15 +88,15 @@ export default function GalleryTemplateBrowser({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm">
+      <div className="bg-white bg-opacity-95 backdrop-blur-lg rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col border-4 border-white">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-400 text-white px-6 py-5">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold">gallARy</h2>
-              <p className="text-sm opacity-90 mt-1">
-                Choose a world template or generate a new one
+              <h2 className="text-3xl font-caveat-brush font-bold tracking-wide">✨ gallARy</h2>
+              <p className="text-sm font-caveat opacity-90 mt-1">
+                Choose a world template to start your AR adventure!
               </p>
             </div>
             <button
@@ -112,16 +112,16 @@ export default function GalleryTemplateBrowser({
         </div>
 
         {/* Search and Filters */}
-        <div className="px-6 py-4 border-b bg-gray-50">
+        <div className="px-6 py-4 border-b bg-gradient-to-br from-orange-50 to-amber-50">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1">
               <input
                 type="text"
-                placeholder="Search worlds..."
+                placeholder="🔍 Search magical worlds..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 font-caveat text-lg transition-all"
               />
             </div>
 
@@ -131,10 +131,10 @@ export default function GalleryTemplateBrowser({
                 <button
                   key={tag}
                   onClick={() => toggleTag(tag)}
-                  className={`px-3 py-1 rounded-full text-sm font-medium transition-all ${
+                  className={`px-4 py-2 rounded-full text-sm font-caveat-brush font-bold transition-all transform hover:scale-105 ${
                     selectedTags.includes(tag)
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      ? "bg-blue-600 text-white shadow-lg"
+                      : "bg-white bg-opacity-70 text-gray-700 hover:bg-opacity-100 border-2 border-amber-200"
                   }`}
                 >
                   {tag}
@@ -145,19 +145,25 @@ export default function GalleryTemplateBrowser({
         </div>
 
         {/* Gallery Grid */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading worlds...</p>
+                <div className="relative w-20 h-20 mx-auto">
+                  <div className="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
+                  <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center text-2xl">
+                    ✨
+                  </div>
+                </div>
+                <p className="mt-4 text-gray-700 font-caveat-brush text-xl">Loading magical worlds...</p>
               </div>
             </div>
           ) : templates.length === 0 ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
-                <p className="text-gray-500 text-lg">No worlds found</p>
-                <p className="text-gray-400 text-sm mt-2">Try adjusting your filters</p>
+                <p className="text-gray-600 text-2xl font-caveat-brush">🌍 No worlds found</p>
+                <p className="text-gray-500 font-caveat text-lg mt-2">Try adjusting your filters</p>
               </div>
             </div>
           ) : (
@@ -165,31 +171,31 @@ export default function GalleryTemplateBrowser({
               {templates.map((template) => (
                 <div
                   key={template.id}
-                  className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer group"
+                  className="bg-white bg-opacity-90 backdrop-blur-sm border-3 border-amber-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-blue-400 transition-all duration-300 cursor-pointer group transform hover:scale-105"
                   onClick={() => handleSelectWorld(template.id)}
                 >
                   {/* Thumbnail */}
-                  <div className="relative aspect-video bg-gray-200 overflow-hidden">
+                  <div className="relative aspect-video bg-gradient-to-br from-blue-100 to-white overflow-hidden">
                     <img
                       src={template.thumbnailUrl}
                       alt={template.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     />
-                    
+
                     {/* Overlay on hover */}
-                    <div className="absolute inset-0 bg-blue-600 bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
-                      <button className="bg-white text-blue-600 px-6 py-2 rounded-full font-semibold opacity-0 group-hover:opacity-100 transform scale-90 group-hover:scale-100 transition-all duration-300">
-                        Use This World
+                    <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent bg-opacity-0 group-hover:bg-opacity-60 transition-all duration-300 flex items-center justify-center">
+                      <button className="bg-white text-blue-600 px-6 py-3 rounded-full font-caveat-brush font-bold text-lg opacity-0 group-hover:opacity-100 transform scale-75 group-hover:scale-100 transition-all duration-300 shadow-lg">
+                        ✨ Enter World
                       </button>
                     </div>
                   </div>
 
                   {/* Info */}
-                  <div className="p-4">
-                    <h3 className="font-semibold text-gray-900 truncate">
+                  <div className="p-4 bg-gradient-to-br from-white to-amber-50">
+                    <h3 className="font-caveat-brush text-xl font-bold text-gray-900 truncate">
                       {template.title}
                     </h3>
-                    <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                    <p className="text-sm font-caveat text-gray-600 mt-1 line-clamp-2">
                       {template.description}
                     </p>
 
@@ -198,7 +204,7 @@ export default function GalleryTemplateBrowser({
                       {template.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded"
+                          className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-caveat-brush rounded-full border border-blue-200"
                         >
                           {tag}
                         </span>
@@ -206,18 +212,13 @@ export default function GalleryTemplateBrowser({
                     </div>
 
                     {/* Stats */}
-                    <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+                    <div className="flex items-center gap-4 mt-3 text-sm text-gray-600 font-caveat">
                       <div className="flex items-center gap-1">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" />
-                        </svg>
+                        <span className="text-red-500">❤️</span>
                         <span>{template.stats.like_count}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
+                        <span>👁️</span>
                         <span>{template.stats.view_count}</span>
                       </div>
                     </div>
@@ -229,14 +230,14 @@ export default function GalleryTemplateBrowser({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t bg-gray-50">
+        <div className="px-6 py-4 border-t-2 border-amber-200 bg-gradient-to-r from-orange-50 to-amber-50">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              {templates.length} {templates.length === 1 ? "world" : "worlds"} available
+            <p className="text-base font-caveat-brush text-gray-700">
+              ✨ {templates.length} magical {templates.length === 1 ? "world" : "worlds"} available
             </p>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              className="px-6 py-2 bg-white border-2 border-amber-200 text-gray-700 rounded-xl hover:bg-amber-50 hover:border-blue-400 transition-all font-caveat-brush transform hover:scale-105"
             >
               Cancel
             </button>

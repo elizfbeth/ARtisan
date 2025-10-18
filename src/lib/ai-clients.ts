@@ -120,7 +120,18 @@ Return ONLY valid JSON.`;
         throw new Error("Failed to parse Gemini response as JSON");
       }
 
-      return JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      // Flatten nested structure if Gemini returns BASIC ANALYSIS / DETAILED ANALYSIS
+      if (parsed["BASIC ANALYSIS"] || parsed["DETAILED ANALYSIS"]) {
+        const flattened = {
+          ...(parsed["BASIC ANALYSIS"] || {}),
+          ...(parsed["DETAILED ANALYSIS"] || {}),
+        };
+        return flattened;
+      }
+
+      return parsed;
     } catch (error) {
       lastError = error as Error;
 
@@ -236,23 +247,20 @@ export async function describeObjectWithGemini(
     const result = await model.generateContent(prompt);
     const response = await result.response;
     return response.text();
-  } else {
-    // For sketch or photo
-    prompt = `Describe this ${inputType === "sketch" ? "sketch" : "object"} as a detailed 3D object. Include: shape, style, colors, materials, and key features. Format it as a prompt suitable for 3D model generation.`;
-
-    parts.push(
-      { text: prompt },
-      {
-        inlineData: {
-          mimeType: "image/png",
-          data: inputData.split(",")[1] || inputData, // Remove data URL prefix if present
-        },
-      },
-    ]);
-    
-    const response = await result.response;
-    return response.text();
   }
+
+  // For sketch or photo - with retry logic
+  prompt = `Describe this ${inputType === "sketch" ? "sketch" : "object"} as a detailed 3D object. Include: shape, style, colors, materials, and key features. Format it as a prompt suitable for 3D model generation.`;
+
+  parts.push(
+    { text: prompt },
+    {
+      inlineData: {
+        mimeType: "image/png",
+        data: inputData.split(",")[1] || inputData, // Remove data URL prefix if present
+      },
+    },
+  );
 
   // Retry logic for handling overloaded API
   const maxRetries = 3;
@@ -281,12 +289,7 @@ export async function describeObjectWithGemini(
                          errorMessage.includes("500"); // Server error
 
       if (!isRetryable || attempt === maxRetries - 1) {
-        // If not retryable or last attempt, throw or use fallback
-        if (inputType === "text") {
-          // For text input, we can use the input directly as a fallback
-          console.warn("Gemini API failed, using input as fallback description");
-          return `A detailed 3D model of ${inputData}. Realistic materials, proper proportions, suitable for AR display.`;
-        }
+        // If not retryable or last attempt, throw
         throw error;
       }
     }

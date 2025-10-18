@@ -46,6 +46,7 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isGalleryBrowserOpen, setIsGalleryBrowserOpen] = useState(false);
+  const [fallbackSceneData, setFallbackSceneData] = useState<SceneData | null>(null);
 
   // Check if the scene ID is a temporary ID (starts with "temp_")
   const isTempSceneId = currentSceneId?.startsWith("temp_");
@@ -231,6 +232,22 @@ export default function Home() {
   const handleNewScene = () => {
     setAppState("upload");
     setCurrentSceneId(null);
+    setFallbackSceneData(null);
+  };
+
+  /**
+   * Handle deleting an object from the scene
+   */
+  const deleteObject = async (objectId: string) => {
+    if (!currentSceneId) return;
+
+    try {
+      // TODO: Implement object deletion via Convex mutation
+      console.log("Deleting object:", objectId);
+      // For now, just log - this should call a Convex mutation to delete the object
+    } catch (error) {
+      console.error("Object deletion error:", error);
+    }
   };
 
   // Automatically transition to viewing when scene is ready
@@ -291,15 +308,9 @@ export default function Home() {
             {/* Gallery template browser button */}
             <button
               onClick={() => setIsGalleryBrowserOpen(true)}
-              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-3"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-serif font-medium hover:bg-blue-700 transition-colors inline-block"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="text-left">
-                <div className="font-semibold">Browse our (GROWING) Gallery</div>
-                <div className="text-xs opacity-90">Choose from pre-made immersive worlds</div>
-              </div>
+              Browse our (GROWING) Gallery
             </button>
           </div>
         )}

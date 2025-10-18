@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
     environmentSource?: string;
     galleryWorldId?: string;
   } = {};
-  
+  let sceneIdTyped: Id<"scenes"> | undefined;
+
   try {
     body = await request.json();
     const { sceneId, photoUrl, environmentSource, galleryWorldId } = body;
@@ -49,8 +50,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Create scene if sceneId not provided (for gallery workflow)
-    let sceneIdTyped: Id<"scenes">;
-    
     if (sceneId) {
       sceneIdTyped = sceneId as Id<"scenes">;
     } else {
@@ -68,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     // Update scene status to analyzing/generating
     await convex.mutation(api.scenes.updateStatus, {
-      sceneId: sceneId as Id<"scenes">,
+      sceneId: sceneIdTyped,
       status: "analyzing",
     });
 
@@ -85,14 +84,14 @@ export async function POST(request: NextRequest) {
     // Update Convex with analysis results (optional for gallery templates)
     if (result.analysis) {
       await convex.mutation(api.scenes.updateAnalysis, {
-      sceneId: sceneId as Id<"scenes">,
+      sceneId: sceneIdTyped,
       analysis: result.analysis,
       });
     }
 
     // Update Convex with environment texture and gallery data
     await convex.mutation(api.scenes.updateEnvironment, {
-      sceneId: sceneId as Id<"scenes">,
+      sceneId: sceneIdTyped,
       environmentTextureUrl: result.environmentTextureUrl,
       environmentStoragePath: result.environmentStoragePath,
       environmentType: result.environmentType,
@@ -109,8 +108,9 @@ export async function POST(request: NextRequest) {
 
     // Optionally trigger scene audio generation (only for standard workflow with analysis)
     if (result.analysis) {
+      const finalSceneId = sceneIdTyped; // Capture for closure
       executeSceneAudioGeneration({
-        sceneId: sceneIdTyped,
+        sceneId: finalSceneId,
         environmentType: result.analysis.environmentType,
         mood: result.analysis.mood,
         objectCount: 0,
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       })
         .then(async (audioResult) => {
           await convex.mutation(api.scenes.updateAudio, {
-            sceneId: sceneIdTyped,
+            sceneId: finalSceneId,
             audioUrl: audioResult.audioUrl,
             audioStoragePath: audioResult.audioStoragePath,
             audioMood: audioResult.audioMood,
@@ -140,9 +140,9 @@ export async function POST(request: NextRequest) {
 
     // Update scene status to error if we have a sceneId
     try {
-      if (body.sceneId) {
+      if (sceneIdTyped) {
         await convex.mutation(api.scenes.updateStatus, {
-          sceneId: body.sceneId as Id<"scenes">,
+          sceneId: sceneIdTyped,
           status: "error",
           error: error instanceof Error ? error.message : "Unknown error",
         });

@@ -6,7 +6,6 @@ import { uploadFromUrl } from "../supabase";
 import {
   fetchWorldDetails,
   getBest3DFormat,
-  getPanoramaUrls,
   GalleryWorld,
 } from "../gallery";
 
@@ -70,7 +69,38 @@ export async function executeSceneCreation(
   input: SceneCreationInput
 ): Promise<SceneCreationResult> {
   console.log("Starting scene creation workflow for scene:", input.sceneId);
+  console.log("Environment source:", input.environmentSource);
   console.log("Photo URL:", input.photoUrl);
+  console.log("Gallery World ID:", input.galleryWorldId);
+
+  // GALLERY TEMPLATE WORKFLOW
+  if (input.environmentSource === "gallery-template" && input.galleryWorldId) {
+    console.log("Using gallery template workflow...");
+
+    // Fetch gallery world data
+    const galleryWorld = await fetchWorldDetails(input.galleryWorldId);
+    console.log("Gallery world fetched:", galleryWorld.display_name);
+
+    // Get the best 3D format
+    const best3D = getBest3DFormat(galleryWorld);
+    console.log("Best 3D format:", best3D.format, best3D.url);
+
+    // Use the thumbnail as environment texture
+    const thumbnailUrl = galleryWorld.generation_output.cond_image_url;
+
+    return {
+      environmentTextureUrl: thumbnailUrl,
+      environmentStoragePath: "", // Gallery URLs are external, no storage path needed
+      environmentType: "gallery",
+      galleryWorldId: input.galleryWorldId,
+      galleryData: galleryWorld,
+    };
+  }
+
+  // STANDARD PHOTO UPLOAD WORKFLOW
+  if (!input.photoUrl) {
+    throw new Error("Photo URL is required for generation workflow");
+  }
 
   // Give Supabase a moment to make the file available
   await new Promise(resolve => setTimeout(resolve, 2000));
@@ -98,11 +128,9 @@ export async function executeSceneCreation(
 
   return {
     analysis,
-    locationContext,
     environmentTextureUrl,
     environmentStoragePath,
     environmentType: "panorama",
-    waypoints,
   };
 }
 
@@ -183,7 +211,7 @@ function createEnvironmentPrompt(analysis: Record<string, unknown>): string {
 /**
  * Fallback: Generate a simple procedural environment if AI generation fails
  */
-export function generateFallbackEnvironment(mood: string, environmentType: string): {
+export function generateFallbackEnvironment(mood: string): {
   type: "procedural";
   config: {
     skyColor: string;
@@ -191,16 +219,16 @@ export function generateFallbackEnvironment(mood: string, environmentType: strin
     fogDensity: number;
   };
 } {
-  // Simple color schemes based on mood and environment
+  // Simple color schemes based on mood
   const colorSchemes: Record<string, { sky: string; ground: string; fog: number }> = {
     calm: { sky: "#87CEEB", ground: "#90EE90", fog: 0.01 },
     energetic: { sky: "#FF6347", ground: "#FFD700", fog: 0.005 },
     mysterious: { sky: "#2F4F4F", ground: "#483D8B", fog: 0.03 },
     default: { sky: "#87CEEB", ground: "#DEB887", fog: 0.015 },
   };
-  
+
   const scheme = colorSchemes[mood.toLowerCase()] || colorSchemes.default;
-  
+
   return {
     type: "procedural",
     config: {
