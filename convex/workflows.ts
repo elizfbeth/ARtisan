@@ -103,10 +103,10 @@ export const composeMusicWorkflow = action({
   args: {
     sceneId: v.id("scenes"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ success: boolean; result?: unknown }> => {
     try {
       // Get current scene state
-      const scene = await ctx.runQuery(api.scenes.getScene, {
+      const scene: unknown = await ctx.runQuery(api.scenes.getScene, {
         sceneId: args.sceneId,
       });
 
@@ -115,14 +115,14 @@ export const composeMusicWorkflow = action({
       }
 
       // Call the music composition workflow endpoint
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/workflows/compose-music`, {
+      const response: Response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/workflows/compose-music`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sceneId: args.sceneId,
-          environmentType: scene.analysis?.environmentType,
-          mood: scene.analysis?.mood,
-          objectCount: scene.objects.length,
+          environmentType: (scene as { analysis?: { environmentType?: string } }).analysis?.environmentType,
+          mood: (scene as { analysis?: { mood?: string } }).analysis?.mood,
+          objectCount: (scene as { objects: unknown[] }).objects.length,
         }),
       });
 
@@ -130,8 +130,8 @@ export const composeMusicWorkflow = action({
         throw new Error(`Music composition failed: ${response.statusText}`);
       }
 
-      const result = await response.json();
-      return result;
+      const result: unknown = await response.json();
+      return { success: true, result };
     } catch (error) {
       console.error("Music composition error:", error);
       throw error;
