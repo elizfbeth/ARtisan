@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, DragEvent, ChangeEvent } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 /**
  * PhotoUpload Component
@@ -104,17 +105,23 @@ export default function PhotoUpload({ onUpload, isUploading = false }: PhotoUplo
 
   return (
     <div className="w-full max-w-2xl mx-auto p-6">
-      {!preview ? (
-        <div
-          className={`border-4 border-dashed rounded-lg p-12 text-center transition-all ${
-            isDragging
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 bg-white hover:border-gray-400"
-          }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
+      <AnimatePresence mode="wait">
+        {!preview ? (
+          <motion.div
+            key="upload"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className={`border-4 border-dashed rounded-lg p-12 text-center transition-all ${
+              isDragging
+                ? "border-blue-500 bg-blue-50 scale-105"
+                : "border-gray-300 bg-white hover:border-gray-400"
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
           <div className="space-y-4">
             <div className="flex justify-center">
               <svg
@@ -148,33 +155,53 @@ export default function PhotoUpload({ onUpload, isUploading = false }: PhotoUplo
                 onChange={handleFileInputChange}
                 className="hidden"
               />
-              <span className="px-6 py-3 bg-blue-600 text-white rounded-lg font-serif font-medium cursor-pointer hover:bg-blue-700 transition-colors inline-block">
+              <motion.span
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-serif font-medium cursor-pointer hover:bg-blue-700 transition-colors inline-block"
+              >
                 Select Photo
-              </span>
+              </motion.span>
             </label>
           </div>
-        </div>
+          </motion.div>
       ) : (
-        <div className="space-y-4">
+        <motion.div
+          key="preview"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-4"
+        >
           {/* Preview */}
-          <div className="relative rounded-lg overflow-hidden bg-gray-100">
+          <motion.div
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", damping: 20 }}
+            className="relative rounded-lg overflow-hidden bg-gray-100"
+          >
             <img
               src={preview}
               alt="Preview"
               className="w-full h-auto max-h-96 object-contain"
             />
-          </div>
+          </motion.div>
 
           {/* Actions */}
           <div className="flex gap-4 justify-center">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={handleReset}
               disabled={isUploading}
               className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-caveat-brush font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Choose Different Photo
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={handleUploadClick}
               disabled={isUploading}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg font-caveat-brush font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -206,18 +233,26 @@ export default function PhotoUpload({ onUpload, isUploading = false }: PhotoUplo
               ) : (
                 "Create AR Scene"
               )}
-            </button>
+            </motion.button>
           </div>
 
-          {isUploading && (
-            <div className="text-center">
-              <p className="text-sm text-gray-600 animate-pulse">
-                Analyzing your photo and generating the AR environment...
-              </p>
-            </div>
-          )}
-        </div>
+          <AnimatePresence>
+            {isUploading && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="text-center"
+              >
+                <p className="text-sm text-gray-600 animate-pulse">
+                  Analyzing your photo and generating the AR environment...
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -283,37 +284,60 @@ export default function Home() {
 
       {/* Main content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {appState === "upload" && (
-          <div className="flex flex-col items-center justify-center min-h-[70vh]">
-            <div className="text-center mb-8">
-              <h2 className="text-4xl font-caveat-brush font-bold text-gray-800 mb-3">
-                Welcome to ARtisan
-              </h2>
-              <p className="text-lg font-caveat-brush text-gray-700 max-w-2xl">
-                Upload a photo and watch as AI transforms it into an immersive AR experience.
-                Then bring your imagination to life by adding your own creations!
-              </p>
-            </div>
-            
-            {/* Photo upload */}
-            <PhotoUpload onUpload={handlePhotoUpload} isUploading={isUploading} />
-            
-            {/* Divider */}
-            <div className="flex items-center gap-4 my-8 w-full max-w-md">
-              <div className="flex-1 h-px bg-gray-300"></div>
-              <span className="text-gray-500 text-sm font-medium">OR</span>
-              <div className="flex-1 h-px bg-gray-300"></div>
-            </div>
-            
-            {/* Gallery template browser button */}
-            <button
-              onClick={() => setIsGalleryBrowserOpen(true)}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-serif font-medium hover:bg-blue-700 transition-colors inline-block"
+        <AnimatePresence mode="wait">
+          {appState === "upload" && (
+            <motion.div
+              key="upload"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="flex flex-col items-center justify-center min-h-[70vh]"
             >
-              Browse our (GROWING) Gallery
-            </button>
-          </div>
-        )}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1, duration: 0.4 }}
+                className="text-center mb-8"
+              >
+                <h2 className="text-4xl font-caveat-brush font-bold text-gray-800 mb-3">
+                  Welcome to ARtisan
+                </h2>
+                <p className="text-lg font-caveat-brush text-gray-700 max-w-2xl">
+                  Upload a photo and watch as AI transforms it into an immersive AR experience.
+                  Then bring your imagination to life by adding your own creations!
+                </p>
+              </motion.div>
+
+              {/* Photo upload */}
+              <PhotoUpload onUpload={handlePhotoUpload} isUploading={isUploading} />
+
+              {/* Divider */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
+                className="flex items-center gap-4 my-8 w-full max-w-md"
+              >
+                <div className="flex-1 h-px bg-gray-300"></div>
+                <span className="text-gray-500 text-sm font-medium">OR</span>
+                <div className="flex-1 h-px bg-gray-300"></div>
+              </motion.div>
+
+              {/* Gallery template browser button */}
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.3 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsGalleryBrowserOpen(true)}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-serif font-medium hover:bg-blue-700 transition-colors inline-block"
+              >
+                Browse our (GROWING) Gallery
+              </motion.button>
+            </motion.div>
+          )}
         
         {/* Gallery Template Browser Modal */}
         <GalleryTemplateBrowser
@@ -323,37 +347,72 @@ export default function Home() {
         />
 
         {appState === "processing" && (
-          <div className="flex flex-col items-center justify-center min-h-[70vh]">
+          <motion.div
+            key="processing"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.4 }}
+            className="flex flex-col items-center justify-center min-h-[70vh]"
+          >
             <div className="text-center space-y-6 max-w-md">
               {/* Loading animation */}
-              <div className="relative w-32 h-32 mx-auto">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", damping: 15, delay: 0.1 }}
+                className="relative w-32 h-32 mx-auto"
+              >
                 <div className="absolute inset-0 border-8 border-blue-200 rounded-full"></div>
                 <div className="absolute inset-0 border-8 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center text-4xl">
                   ✨
                 </div>
-              </div>
+              </motion.div>
 
               {/* Status messages */}
-              <div className="space-y-2">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="space-y-2"
+              >
                 <h2 className="text-2xl font-caveat-brush font-bold text-gray-800">
                   Creating Your AR Scene
                 </h2>
-                
-                {scene?.status === "analyzing" && (
-                  <p className="text-gray-600 font-caveat-brush animate-pulse">
-                    Analyzing your photo with Gemini AI...
-                  </p>
-                )}
-                
-                {scene?.status === "generating" && (
-                  <p className="text-gray-600 font-caveat-brush animate-pulse">
-                    Generating immersive environment with fal.ai...
-                  </p>
-                )}
-                
+
+                <AnimatePresence mode="wait">
+                  {scene?.status === "analyzing" && (
+                    <motion.p
+                      key="analyzing"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="text-gray-600 font-caveat-brush animate-pulse"
+                    >
+                      Analyzing your photo with Gemini AI...
+                    </motion.p>
+                  )}
+
+                  {scene?.status === "generating" && (
+                    <motion.p
+                      key="generating"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="text-gray-600 font-caveat-brush animate-pulse"
+                    >
+                      Generating immersive environment with fal.ai...
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+
                 {scene?.analysis && (
-                  <div className="mt-4 p-4 bg-white bg-opacity-50 rounded-lg text-left">
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 p-4 bg-white bg-opacity-50 rounded-lg text-left"
+                  >
                     <p className="text-sm font-caveat-brush font-semibold text-gray-700 mb-2">
                       Scene Analysis:
                     </p>
@@ -362,20 +421,27 @@ export default function Home() {
                       <li>• Mood: {scene.analysis.mood}</li>
                       <li>• Objects: {scene.analysis.keyObjects?.join(", ") || "N/A"}</li>
                     </ul>
-                  </div>
+                  </motion.div>
                 )}
-              </div>
+              </motion.div>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {appState === "viewing" && scene && (
-          <div className="space-y-4">
+          <motion.div
+            key="viewing"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4 }}
+            className="space-y-4"
+          >
             {/* AR Viewer */}
             <div className="rounded-lg overflow-hidden shadow-2xl">
               <ARViewer
                 environmentTextureUrl={scene.environmentTextureUrl}
-                galleryWorldId={scene.galleryWorldId || (scene as any).worldLabsWorldId}
+                galleryWorldId={scene.galleryWorldId || (scene as Record<string, unknown>).worldLabsWorldId as string | undefined}
                 objects={scene.objects.map((obj) => ({
                   id: obj.id,
                   name: obj.name,
@@ -483,8 +549,9 @@ export default function Home() {
                 )}
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
 
       {/* Footer */}

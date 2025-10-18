@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   fetchWorldTemplates,
   WorldTemplate,
@@ -88,8 +89,24 @@ export default function GalleryTemplateBrowser({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm">
-      <div className="bg-white bg-opacity-95 backdrop-blur-lg rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col border-4 border-white">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white bg-opacity-95 backdrop-blur-lg rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col border-4 border-white"
+          >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-400 text-white px-6 py-5">
           <div className="flex items-center justify-between">
@@ -167,11 +184,28 @@ export default function GalleryTemplateBrowser({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={{
+                visible: {
+                  transition: {
+                    staggerChildren: 0.1
+                  }
+                }
+              }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            >
               {templates.map((template) => (
-                <div
+                <motion.div
                   key={template.id}
-                  className="bg-white bg-opacity-90 backdrop-blur-sm border-3 border-amber-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-blue-400 transition-all duration-300 cursor-pointer group transform hover:scale-105"
+                  variants={{
+                    hidden: { opacity: 0, y: 20, scale: 0.95 },
+                    visible: { opacity: 1, y: 0, scale: 1 }
+                  }}
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  transition={{ type: "spring", damping: 20, stiffness: 300 }}
+                  className="bg-white bg-opacity-90 backdrop-blur-sm border-3 border-amber-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-blue-400 transition-all duration-300 cursor-pointer group"
                   onClick={() => handleSelectWorld(template.id)}
                 >
                   {/* Thumbnail */}
@@ -223,9 +257,9 @@ export default function GalleryTemplateBrowser({
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
 
@@ -243,8 +277,10 @@ export default function GalleryTemplateBrowser({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
