@@ -167,24 +167,24 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+    <main className="min-h-screen">
       {/* Header */}
       <header className="bg-white bg-opacity-90 backdrop-blur-sm shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="text-3xl">🎨</div>
+            <img src="/artisanlogo.png" alt="ARtisan" className="w-30 h-30 object-contain" />
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                ARtisan
+              <h1 className="text-2xl font-caveat font-bold text-black">
+                ARtisan 
               </h1>
-              <p className="text-xs text-gray-600">Transform memories into AR magic</p>
+              <p className="text-xs text-gray-600 font-serif capitalize">TRANSFORM MEMORIES INTO AR MAGIC</p>
             </div>
           </div>
           
           {appState === "viewing" && (
             <button
               onClick={handleNewScene}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-caveat-brush"
             >
               Create New Scene
             </button>
@@ -197,10 +197,10 @@ export default function Home() {
         {appState === "upload" && (
           <div className="flex flex-col items-center justify-center min-h-[70vh]">
             <div className="text-center mb-8">
-              <h2 className="text-4xl font-bold text-gray-800 mb-3">
+              <h2 className="text-4xl font-caveat-brush font-bold text-white mb-3">
                 Welcome to ARtisan
               </h2>
-              <p className="text-lg text-gray-600 max-w-2xl">
+              <p className="text-lg font-caveat-brush text-white max-w-2xl">
                 Upload a photo and watch as AI transforms it into an immersive AR experience.
                 Then bring your imagination to life by adding your own creations!
               </p>
@@ -223,28 +223,28 @@ export default function Home() {
 
               {/* Status messages */}
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-gray-800">
+                <h2 className="text-2xl font-caveat-brush font-bold text-gray-800">
                   Creating Your AR Scene
                 </h2>
                 
                 {scene?.status === "analyzing" && (
-                  <p className="text-gray-600 animate-pulse">
+                  <p className="text-gray-600 font-caveat-brush animate-pulse">
                     Analyzing your photo with Gemini AI...
                   </p>
                 )}
                 
                 {scene?.status === "generating" && (
-                  <p className="text-gray-600 animate-pulse">
+                  <p className="text-gray-600 font-caveat-brush animate-pulse">
                     Generating immersive environment with fal.ai...
                   </p>
                 )}
                 
                 {scene?.analysis && (
                   <div className="mt-4 p-4 bg-white bg-opacity-50 rounded-lg text-left">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">
+                    <p className="text-sm font-caveat-brush font-semibold text-gray-700 mb-2">
                       Scene Analysis:
                     </p>
-                    <ul className="text-sm text-gray-600 space-y-1">
+                    <ul className="text-sm font-caveat-brush text-gray-600 space-y-1">
                       <li>• Environment: {scene.analysis.environmentType}</li>
                       <li>• Mood: {scene.analysis.mood}</li>
                       <li>• Objects: {scene.analysis.keyObjects.join(", ")}</li>
@@ -289,25 +289,25 @@ export default function Home() {
               <div className="space-y-4">
                 {/* Scene stats */}
                 <div className="bg-white rounded-lg shadow-lg p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">
+                  <h3 className="text-lg font-caveat-brush font-bold text-gray-800 mb-4">
                     Scene Info
                   </h3>
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Environment:</span>
-                      <span className="font-semibold text-gray-800">
+                      <span className="text-gray-600 font-serif">Environment:</span>
+                      <span className="font-caveat-brush font-semibold text-gray-800">
                         {scene.analysis?.environmentType || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Mood:</span>
-                      <span className="font-semibold text-gray-800">
+                      <span className="text-gray-600 font-serif">Mood:</span>
+                      <span className="font-caveat-brush font-semibold text-gray-800">
                         {scene.analysis?.mood || "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Objects:</span>
-                      <span className="font-semibold text-gray-800">
+                      <span className="text-gray-600 font-serif">Objects:</span>
+                      <span className="font-caveat-brush font-semibold text-gray-800">
                         {scene.objects.length}
                       </span>
                     </div>
@@ -316,13 +316,13 @@ export default function Home() {
 
                 {/* Actions */}
                 <div className="bg-white rounded-lg shadow-lg p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">
+                  <h3 className="text-lg font-caveat-brush font-bold text-gray-800 mb-4">
                     Actions
                   </h3>
                   <div className="space-y-2">
                     <button
                       onClick={handleRegenerateMusic}
-                      className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-caveat-brush"
                     >
                       🎵 Recompose Soundtrack
                     </button>
@@ -332,14 +332,14 @@ export default function Home() {
                 {/* Objects list */}
                 {scene.objects.length > 0 && (
                   <div className="bg-white rounded-lg shadow-lg p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">
+                    <h3 className="text-lg font-caveat-brush font-bold text-gray-800 mb-4">
                       Created Objects
                     </h3>
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                       {scene.objects.map((obj) => (
                         <div
                           key={obj.id}
-                          className="p-2 bg-gray-50 rounded text-sm flex items-center justify-between group"
+                          className="p-2 bg-gray-50 rounded text-sm font-caveat-brush font-bold flex items-center justify-between group"
                         >
                           <span className="truncate">{obj.name}</span>
                           <button
@@ -361,9 +361,9 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="mt-16 py-8 text-center text-gray-600 text-sm">
+      <footer className="mt-16 py-8 text-center text-white text-sm font-serif">
         <p>
-          Built with ❤️ using Convex, Supabase, Gemini, fal.ai, ElevenLabs & more
+          Built with ❤️ using Convex, Supabase, Gemini, Fal.ai, ElevenLabs & more
         </p>
       </footer>
     </main>

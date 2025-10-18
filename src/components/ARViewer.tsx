@@ -476,10 +476,10 @@ export default function ARViewer({
     <div className="relative w-full h-screen">
       {/* Controls hint */}
       <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-4 py-2 rounded">
-        <p className="font-semibold mb-1">Controls:</p>
-        <p className="text-sm">WASD - Move | Mouse - Look | E/Q - Up/Down</p>
-        <p className="text-sm mt-1">Hover over objects to delete them</p>
-        <p className="text-sm mt-1">Drag to move objects</p>
+        <p className="font-semibold mb-1 font-caveat-brush">Controls:</p>
+        <p className="text-sm font-serif">WASD - Move | Mouse - Look | E/Q - Up/Down</p>
+        <p className="text-sm mt-1 font-serif">Hover over objects to delete them</p>
+        <p className="text-sm mt-1 font-serif">Drag to move objects</p>
       </div>
 
       {/* 3D Canvas */}
