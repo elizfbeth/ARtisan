@@ -54,13 +54,40 @@ export default defineSchema({
     // Error information if generation fails
     error: v.optional(v.string()),
     
-    // Gemini analysis results
+    // Gemini analysis results (enhanced with 25+ detailed fields)
     analysis: v.optional(v.object({
+      // Basic fields
       environmentType: v.string(),
       keyObjects: v.array(v.string()),
       depthPerspective: v.string(),
       colorPalette: v.array(v.string()),
       mood: v.string(),
+      // Landmark detection
+      isLandmark: v.optional(v.boolean()),
+      landmarkName: v.optional(v.union(v.string(), v.null())),
+      location: v.optional(v.union(v.string(), v.null())),
+      landmarkConfidence: v.optional(v.number()),
+      // Extended detailed analysis (25+ fields for enhanced scene creation)
+      lightingConditions: v.optional(v.string()),
+      weatherConditions: v.optional(v.string()),
+      architecture: v.optional(v.string()),
+      vegetation: v.optional(v.string()),
+      surfaceMaterials: v.optional(v.string()),
+      signage: v.optional(v.string()),
+      people: v.optional(v.string()),
+      vehicles: v.optional(v.string()),
+      streetFurniture: v.optional(v.string()),
+      spatialLayout: v.optional(v.string()),
+      foregroundDetails: v.optional(v.string()),
+      midgroundDetails: v.optional(v.string()),
+      backgroundDetails: v.optional(v.string()),
+      uniqueFeatures: v.optional(v.string()),
+      textureDetails: v.optional(v.string()),
+      scaleIndicators: v.optional(v.string()),
+      shadowPatterns: v.optional(v.string()),
+      reflections: v.optional(v.string()),
+      materialAging: v.optional(v.string()),
+      culturalElements: v.optional(v.string()),
       location: v.optional(v.object({
         hasLocation: v.boolean(),
         locationName: v.string(),
@@ -114,6 +141,24 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_status", ["status"])
     .index("by_createdAt", ["createdAt"]),
+
+  // Landmark cache - stores scraped landmark data for fast retrieval
+  landmarkCache: defineTable({
+    name: v.string(), // Normalized landmark name (lowercase)
+    location: v.string(),
+    additionalImages: v.array(v.string()),
+    historicalInfo: v.string(),
+    architecturalDetails: v.string(),
+    relatedPlaces: v.array(v.string()),
+    sources: v.array(v.object({
+      title: v.string(),
+      url: v.string(),
+      excerpt: v.string(),
+    })),
+    cachedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"]),
 
   // Assets table - tracks all generated assets
   assets: defineTable({

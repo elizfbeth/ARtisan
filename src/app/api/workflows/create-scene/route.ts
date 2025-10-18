@@ -3,7 +3,8 @@ import { executeSceneCreation } from "@/lib/workflows/createScene";
 import { executeSceneAudioGeneration } from "@/lib/workflows/generateSceneAudio";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import "@/lib/net"; // initialize IPv4-first DNS order
+import type { Id } from "@/convex/_generated/dataModel";
 
 /**
  * Scene Creation Workflow API Route
@@ -67,8 +68,8 @@ export async function POST(request: NextRequest) {
 
     // Update scene status to analyzing/generating
     await convex.mutation(api.scenes.updateStatus, {
-      sceneId: sceneIdTyped,
-      status: environmentSource === "gallery-template" ? "generating" : "analyzing",
+      sceneId: sceneId as Id<"scenes">,
+      status: "analyzing",
     });
 
     // Execute the scene creation workflow
@@ -84,14 +85,14 @@ export async function POST(request: NextRequest) {
     // Update Convex with analysis results (optional for gallery templates)
     if (result.analysis) {
       await convex.mutation(api.scenes.updateAnalysis, {
-        sceneId: sceneIdTyped,
-        analysis: result.analysis,
+      sceneId: sceneId as Id<"scenes">,
+      analysis: result.analysis,
       });
     }
 
     // Update Convex with environment texture and gallery data
     await convex.mutation(api.scenes.updateEnvironment, {
-      sceneId: sceneIdTyped,
+      sceneId: sceneId as Id<"scenes">,
       environmentTextureUrl: result.environmentTextureUrl,
       environmentStoragePath: result.environmentStoragePath,
       environmentType: result.environmentType,

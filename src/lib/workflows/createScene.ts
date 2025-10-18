@@ -70,53 +70,32 @@ export async function executeSceneCreation(
   input: SceneCreationInput
 ): Promise<SceneCreationResult> {
   console.log("Starting scene creation workflow for scene:", input.sceneId);
-  
-  const environmentSource = input.environmentSource || "generate";
-  
-  // Gallery template workflow
-  if (environmentSource === "gallery-template" && input.galleryWorldId) {
-    return await executeGalleryWorkflow(input.sceneId, input.galleryWorldId);
-  }
-  
-  // Standard AI generation workflow
-  if (!input.photoUrl) {
-    throw new Error("Photo URL required for generation workflow");
-  }
-  
-  // Step 1: Analyze the photo with Gemini (includes location detection)
+  console.log("Photo URL:", input.photoUrl);
+
+  // Give Supabase a moment to make the file available
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // Step 1: Analyze the photo with Gemini
   console.log("Step 1: Analyzing photo with Gemini...");
   const analysis = await analyzeImageWithGemini(input.photoUrl);
   console.log("Analysis complete:", analysis);
-  
-  // Step 2: Get location-specific information if location detected
-  let locationContext;
-  let waypoints;
-  
-  if (analysis.location?.hasLocation && analysis.location.locationName) {
-    console.log("Step 2: Location detected:", analysis.location.locationName);
-    // TODO: Implement Exa AI integration for location-specific information
-    // For now, skip location context retrieval
-    
-    // Generate waypoints for Street View navigation
-    waypoints = generateWaypoints(analysis.location.locationName);
-  }
-  
-  // Step 3: Generate environment prompt based on analysis and location context
-  const environmentPrompt = createEnvironmentPrompt(analysis, locationContext);
+
+  // Step 2: Generate environment prompt based on analysis
+  const environmentPrompt = createEnvironmentPrompt(analysis);
   console.log("Generated environment prompt:", environmentPrompt);
-  
-  // Step 4: Generate environment texture with fal.ai
-  console.log("Step 4: Generating 360° panoramic environment with fal.ai...");
+
+  // Step 3: Generate environment texture with fal.ai
+  console.log("Step 2: Generating environment with fal.ai...");
   const generatedImageUrl = await generateEnvironmentWithFal(environmentPrompt);
   console.log("Environment generated:", generatedImageUrl);
-  
-  // Step 5: Upload to Supabase storage
-  console.log("Step 5: Uploading to Supabase...");
+
+  // Step 4: Upload to Supabase storage
+  console.log("Step 3: Uploading to Supabase...");
   const storagePath = `scenes/${input.sceneId}/environment.jpg`;
-  const { url: environmentTextureUrl, path: environmentStoragePath } = 
+  const { url: environmentTextureUrl, path: environmentStoragePath } =
     await uploadFromUrl("ENVIRONMENTS", storagePath, generatedImageUrl, "image/jpeg");
   console.log("Upload complete:", environmentTextureUrl);
-  
+
   return {
     analysis,
     locationContext,
@@ -128,133 +107,77 @@ export async function executeSceneCreation(
 }
 
 /**
- * Execute Gallery template workflow
+ * Create an environment generation prompt from Gemini analysis
+ * Includes ALL detailed analysis for accurate scene replication
  */
-async function executeGalleryWorkflow(
-  sceneId: string,
-  galleryWorldId: string
-): Promise<SceneCreationResult> {
-  console.log("Using gallery template:", galleryWorldId);
+function createEnvironmentPrompt(analysis: Record<string, unknown>): string {
+  // Safely extract fields with fallbacks
+  const environmentType = (typeof analysis?.environmentType === "string" ? analysis.environmentType : null) || "generic environment";
+  const keyObjects = Array.isArray(analysis?.keyObjects) ? analysis.keyObjects : [];
+  const mood = (typeof analysis?.mood === "string" ? analysis.mood : null) || "atmospheric";
+  const colorPalette = Array.isArray(analysis?.colorPalette) ? analysis.colorPalette : [];
   
-  // Step 1: Get gallery world data (uses mock data for now)
-  console.log("Step 1: Loading gallery world data...");
-  const worldData = await fetchWorldDetails(galleryWorldId);
-  console.log("World data loaded:", worldData.display_name);
+  // Extract location and landmark info
+  const landmarkName = typeof analysis?.landmarkName === "string" ? analysis.landmarkName : null;
+  const location = typeof analysis?.location === "string" ? analysis.location : null;
+  const isLandmark = analysis?.isLandmark === true;
   
-  // Step 2: Get best available 3D format
-  const format = getBest3DFormat(worldData);
-  console.log("Using format:", format.format);
-  
-  // Step 3: For panoramas, get the first panorama URL as texture
-  let environmentTextureUrl = worldData.generation_output.cond_image_url;
-  
-  if (format.format === "panoramas" && format.metadata) {
-    const panoramas = await getPanoramaUrls(worldData);
-    if (panoramas.length > 0) {
-      environmentTextureUrl = panoramas[0].url;
-    }
-  }
-  
-  // Step 4: For storage path, use the gallery CDN URL directly
-  console.log("Step 4: Using gallery CDN URL...");
-  const storagePath = `scenes/${sceneId}/gallery_${galleryWorldId}`;
-  const environmentStoragePath = storagePath;
-  
-  // Generate synthetic analysis from gallery tags and data
-  const analysis = {
-    environmentType: worldData.tags.join(", ") || "immersive",
-    keyObjects: [],
-    depthPerspective: "multi-plane",
-    colorPalette: [],
-    mood: worldData.tags.includes("realism") ? "realistic" : "artistic",
-  };
-  
-  return {
-    analysis,
-    environmentTextureUrl,
-    environmentStoragePath,
-    environmentType: "gallery",
-    galleryWorldId,
-    galleryData: worldData,
-  };
-}
+  // Extract detailed analysis fields
+  const architecture = typeof analysis?.architecture === "string" ? analysis.architecture : "";
+  const signage = typeof analysis?.signage === "string" ? analysis.signage : "";
+  const lightingConditions = typeof analysis?.lightingConditions === "string" ? analysis.lightingConditions : "";
+  const uniqueFeatures = typeof analysis?.uniqueFeatures === "string" ? analysis.uniqueFeatures : "";
 
-/**
- * Create an environment generation prompt from Gemini analysis and location context
- */
-function createEnvironmentPrompt(
-  analysis: {
-    environmentType: string;
-    keyObjects: string[];
-    depthPerspective: string;
-    colorPalette: string[];
-    mood: string;
-    location?: {
-      hasLocation: boolean;
-      locationName: string;
-      locationType: string;
-      locationKeywords: string[];
-    };
-  },
-  locationContext?: {
-    description: string;
-    facts: string[];
-    atmosphere: string;
-    historicalContext: string;
-  }
-): string {
-  const { environmentType, keyObjects, mood, colorPalette, location } = analysis;
-  
-  // Build a rich, descriptive prompt for environment generation
-  const objectsText = keyObjects.length > 0 
-    ? ` featuring ${keyObjects.slice(0, 3).join(", ")}` 
-    : "";
-    
-  const colorsText = colorPalette.length > 0 
-    ? ` with ${colorPalette.slice(0, 3).join(", ")} color tones` 
-    : "";
-  
-  // Add location-specific context if available
+  // Build location text
   let locationText = "";
-  if (location?.hasLocation && locationContext) {
-    locationText = ` at ${location.locationName}. ${locationContext.atmosphere}. ${locationContext.description}`;
+  if (isLandmark && landmarkName) {
+    locationText = ` of ${landmarkName}`;
+    if (location) {
+      locationText += ` in ${location}`;
+    }
+  } else if (location) {
+    locationText = ` in ${location}`;
+  }
+
+  // Build object and color text
+  const objectsText = keyObjects.length > 0
+    ? ` featuring ${keyObjects.join(", ")}`
+    : "";
+
+  const colorsText = colorPalette.length > 0
+    ? ` with ${colorPalette.join(", ")} color tones`
+    : "";
+
+  // Build comprehensive prompt with ALL details
+  const parts: string[] = [];
+  
+  // Base scene
+  parts.push(`A ${mood} ${environmentType} scene${locationText}${objectsText}${colorsText}. The image has to be point of view as a person on the ground. This image will be converted to a 360-degree panoramic view so make it seamless.`);
+  
+  // Architecture details
+  if (architecture) {
+    parts.push(`. Architecture: ${architecture}`);
   }
   
-  return `A ${mood} ${environmentType} scene${objectsText}${colorsText}${locationText}. Immersive, photorealistic, wide angle view, atmospheric lighting, high detail, seamless 360-degree equirectangular panoramic perspective`;
-}
+  // Signage (critical for location identification)
+  if (signage) {
+    parts.push(`. Signage and text: ${signage}`);
+  }
+  
+  // Lighting
+  if (lightingConditions) {
+    parts.push(`. Lighting: ${lightingConditions}`);
+  }
+  
+  // Unique features
+  if (uniqueFeatures) {
+    parts.push(`. Distinctive features: ${uniqueFeatures}`);
+  }
+  
+  // Technical requirements - emphasize ground-level perspective
+  parts.push(`. Generate as 360-degree immersive equirectangular panorama from GROUND LEVEL perspective (eye-level at 1.5-2 meters height). The viewpoint must be from a person standing on the ground, NOT from above or aerial view. Photorealistic, atmospheric lighting, high detail, seamless horizontal 360-degree panorama`);
 
-/**
- * Generate waypoints for Street View navigation based on location
- */
-function generateWaypoints(locationName: string): Array<{
-  id: string;
-  position: { x: number; y: number; z: number };
-  label: string;
-}> {
-  // Generate 4 cardinal direction waypoints
-  const distance = 10;
-  return [
-    {
-      id: "north",
-      position: { x: 0, y: 1.6, z: -distance },
-      label: `North of ${locationName}`,
-    },
-    {
-      id: "east",
-      position: { x: distance, y: 1.6, z: 0 },
-      label: `East of ${locationName}`,
-    },
-    {
-      id: "south",
-      position: { x: 0, y: 1.6, z: distance },
-      label: `South of ${locationName}`,
-    },
-    {
-      id: "west",
-      position: { x: -distance, y: 1.6, z: 0 },
-      label: `West of ${locationName}`,
-    },
-  ];
+  return parts.join("");
 }
 
 /**

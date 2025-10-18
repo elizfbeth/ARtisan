@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { fetchWithRetry } from "./net";
 
 /**
  * Supabase Client Configuration
@@ -17,8 +18,8 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
 
 // Create Supabase client for client-side usage
 export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 // Create Supabase client with service role for server-side usage
@@ -28,8 +29,8 @@ export const getServiceRoleClient = () => {
   }
   
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       auth: {
         autoRefreshToken: false,
@@ -59,8 +60,11 @@ export async function uploadFile(
   contentType?: string
 ): Promise<{ url: string; path: string }> {
   const bucketName = STORAGE_BUCKETS[bucket];
-  
-  const { data, error } = await supabase.storage
+
+  // Use service role client for server-side uploads
+  const client = getServiceRoleClient();
+
+  const { data, error } = await client.storage
     .from(bucketName)
     .upload(path, file, {
       contentType,
@@ -72,7 +76,7 @@ export async function uploadFile(
   }
 
   // Get public URL
-  const { data: urlData } = supabase.storage
+  const { data: urlData } = client.storage
     .from(bucketName)
     .getPublicUrl(data.path);
 
@@ -92,7 +96,7 @@ export async function uploadFromUrl(
   contentType?: string
 ): Promise<{ url: string; path: string }> {
   // Fetch the file from URL
-  const response = await fetch(url);
+  const response = await fetchWithRetry(url, {}, { timeoutMs: 60_000, retries: 2 });
   if (!response.ok) {
     throw new Error(`Failed to fetch file from URL: ${response.statusText}`);
   }

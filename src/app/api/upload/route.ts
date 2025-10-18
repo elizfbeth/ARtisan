@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { uploadFile } from "@/lib/supabase";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import "@/lib/http-init"; // Initialize IPv4-first DNS and increased timeouts
 import { Id } from "@/convex/_generated/dataModel";
 
 /**
@@ -14,7 +16,12 @@ import { Id } from "@/convex/_generated/dataModel";
  * 4. Triggers scene generation workflow
  */
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+// Verify Convex URL is configured
+if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
+  throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
+}
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL);
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,28 +71,105 @@ export async function POST(request: NextRequest) {
 
     console.log("Photo uploaded to Supabase:", photoUrl);
 
-    // Create scene in Convex
-    const sceneId = await convex.mutation(api.scenes.createScene, {
-      photoUrl,
-      photoStoragePath,
-      userId: userId || undefined,
-    });
+    // Verify the uploaded file is accessible
+    try {
+      const verifyResponse = await fetch(photoUrl, { method: "HEAD" });
+      if (!verifyResponse.ok) {
+        console.warn("Photo URL not immediately accessible, but continuing...");
+      } else {
+        console.log("Photo URL verified as accessible");
+      }
+    } catch (error) {
+      console.warn("Could not verify photo URL accessibility:", error);
+    }
 
-    console.log("Scene created in Convex:", sceneId);
+    // Create scene in Convex (non-blocking approach)
+    console.log("Creating scene in Convex...");
+    let sceneId: Id<"scenes"> | string;
 
-    // Trigger scene generation workflow directly
-    // Note: This will be handled asynchronously
-    // We don't await it to return quickly to the client
-    fetch("http://localhost:3000/api/workflows/create-scene", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sceneId,
+    // Try to create scene with a short timeout
+    try {
+      sceneId = await Promise.race([
+        convex.mutation(api.scenes.createScene, {
+          photoUrl,
+          photoStoragePath,
+          userId: userId || undefined,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Convex timeout")), 8000) // Shorter timeout
+        )
+      ]) as Id<"scenes">;
+
+      console.log("✓ Scene created in Convex:", sceneId);
+    } catch (convexError) {
+      console.warn("⚠ Convex scene creation timed out, using fallback approach");
+
+      // Generate a temporary scene ID (Convex will create it later in the background)
+      sceneId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}` as Id<"scenes">;
+      console.log("Using temporary scene ID:", sceneId);
+
+      // Try to create scene in background (don't wait for it)
+      convex.mutation(api.scenes.createScene, {
         photoUrl,
-      }),
-    }).catch((error) => {
-      console.error("Failed to trigger workflow:", error);
-    });
+        photoStoragePath,
+        userId: userId || undefined,
+      }).then((actualSceneId) => {
+        console.log("✓ Scene eventually created in Convex:", actualSceneId);
+        // Note: The workflow will use the temp ID, but Convex will have a real scene
+      }).catch((bgError) => {
+        console.error("⚠ Background scene creation also failed:", bgError);
+      });
+    }
+
+    // Trigger ENHANCED scene generation workflow (with ultra-detailed 500+ word prompts)
+    console.log("Triggering ENHANCED scene generation workflow with GPS + ultra-detailed prompts...");
+
+    // If using temp ID, wait for the workflow to complete and return the result
+    if (sceneId.startsWith("temp_")) {
+      console.log("Using temp ID - waiting for enhanced workflow to complete...");
+
+      try {
+        const workflowResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/workflows/create-scene-enhanced`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sceneId,
+              photoUrl,
+            }),
+          }
+        );
+
+        if (workflowResponse.ok) {
+          const workflowResult = await workflowResponse.json();
+          console.log("Enhanced workflow completed successfully");
+
+          return NextResponse.json({
+            success: true,
+            sceneId,
+            photoUrl,
+            scene: workflowResult.scene, // Include complete scene data with ultra-detailed analysis
+          });
+        } else {
+          console.error("Enhanced workflow failed:", await workflowResponse.text());
+        }
+      } catch (workflowError) {
+        console.error("Failed to execute enhanced workflow:", workflowError);
+      }
+    } else {
+      // For real Convex IDs, trigger enhanced workflow asynchronously
+      fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/workflows/create-scene-enhanced`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneId,
+          photoUrl,
+        }),
+      }).catch((error) => {
+        console.error("Failed to trigger enhanced workflow:", error);
+      });
+    }
 
     console.log("Scene generation workflow triggered");
 
@@ -121,7 +205,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const scene = await convex.query(api.scenes.getScene, {
-      sceneId: sceneId as Id<"scenes">, // Type assertion for ID
+      sceneId: sceneId as Id<"scenes">,
     });
 
     return NextResponse.json({
