@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -319,7 +319,7 @@ export default function Home() {
                     <ul className="text-sm font-caveat-brush text-gray-600 space-y-1">
                       <li>• Environment: {scene.analysis.environmentType}</li>
                       <li>• Mood: {scene.analysis.mood}</li>
-                      <li>• Objects: {scene.analysis.keyObjects.join(", ")}</li>
+                      <li>• Objects: {scene.analysis.keyObjects?.join(", ") || "N/A"}</li>
                     </ul>
                   </div>
                 )}
@@ -386,7 +386,7 @@ export default function Home() {
                     <div className="flex justify-between">
                       <span className="text-gray-600 font-serif">Objects:</span>
                       <span className="font-caveat-brush font-semibold text-gray-800">
-                        {scene.objects.length}
+                        {scene.objects?.length || 0}
                       </span>
                     </div>
                   </div>
