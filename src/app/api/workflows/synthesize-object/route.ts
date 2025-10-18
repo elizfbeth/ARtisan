@@ -39,12 +39,20 @@ export async function POST(request: NextRequest) {
 
     console.log("Starting object synthesis workflow:", { sceneId, inputType });
 
+    // Get current scene to pass existing objects for positioning
+    const scene = await convex.query(api.scenes.getScene, { sceneId });
+    const existingObjects = scene?.objects.map(obj => ({
+      position: obj.position,
+      scale: obj.scale,
+    })) || [];
+
     // Execute the object synthesis workflow
     const result = await executeObjectSynthesis({
       sceneId,
       inputType,
       inputData,
       inputName,
+      existingObjects,
     });
 
     console.log("Object synthesis complete:", result);
@@ -66,11 +74,11 @@ export async function POST(request: NextRequest) {
     });
 
     // Check if we should regenerate music
-    const scene = await convex.query(api.scenes.getScene, {
+    const updatedScene = await convex.query(api.scenes.getScene, {
       sceneId,
     });
 
-    if (scene && scene.objects.length % 3 === 0 && scene.objects.length > 0) {
+    if (updatedScene && updatedScene.objects.length % 3 === 0 && updatedScene.objects.length > 0) {
       // Regenerate scene audio after every 3 objects
       console.log("Triggering scene audio regeneration...");
       try {

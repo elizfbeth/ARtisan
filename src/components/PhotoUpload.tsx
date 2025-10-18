@@ -133,10 +133,10 @@ export default function PhotoUpload({ onUpload, isUploading = false }: PhotoUplo
             </div>
 
             <div>
-              <p className="text-lg font-semibold text-gray-700 mb-2">
+              <p className="text-lg font-semibold font-caveat-brush text-gray-700 mb-2">
                 Upload a photo to create your AR scene
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm font-serif text-gray-500">
                 Drag and drop an image here, or click to select
               </p>
             </div>
@@ -148,7 +148,7 @@ export default function PhotoUpload({ onUpload, isUploading = false }: PhotoUplo
                 onChange={handleFileInputChange}
                 className="hidden"
               />
-              <span className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium cursor-pointer hover:bg-blue-700 transition-colors inline-block">
+              <span className="px-6 py-3 bg-blue-600 text-white rounded-lg font-serif font-medium cursor-pointer hover:bg-blue-700 transition-colors inline-block">
                 Select Photo
               </span>
             </label>
@@ -170,14 +170,14 @@ export default function PhotoUpload({ onUpload, isUploading = false }: PhotoUplo
             <button
               onClick={handleReset}
               disabled={isUploading}
-              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-caveat-brush font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Choose Different Photo
             </button>
             <button
               onClick={handleUploadClick}
               disabled={isUploading}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-caveat-brush font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isUploading ? (
                 <>

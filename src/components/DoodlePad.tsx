@@ -130,10 +130,10 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
     <div className="bg-white rounded-lg shadow-lg p-6 space-y-4">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+        <h2 className="text-2xl font-caveat-brush font-bold text-gray-800 mb-2">
           Doodle to Life ✨
         </h2>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm font-serif text-gray-600">
           Create objects by sketching, describing, or uploading a photo
         </p>
       </div>
@@ -142,7 +142,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
       <div className="flex gap-2 border-b pb-4">
         <button
           onClick={() => setMode("text")}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg font-caveat-brush font-medium transition-colors ${
             mode === "text"
               ? "bg-blue-600 text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -152,7 +152,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
         </button>
         <button
           onClick={() => setMode("sketch")}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg font-caveat-brush font-medium transition-colors ${
             mode === "sketch"
               ? "bg-blue-600 text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -162,7 +162,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
         </button>
         <button
           onClick={() => setMode("photo")}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg font-caveat-brush font-medium transition-colors ${
             mode === "photo"
               ? "bg-blue-600 text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -174,7 +174,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
 
       {/* Optional name input */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-serif font-medium text-gray-700 mb-1">
           Object Name (Optional)
         </label>
         <input
@@ -182,7 +182,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
           value={objectName}
           onChange={(e) => setObjectName(e.target.value)}
           placeholder="e.g., Flying Dragon, Magic Wand..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg font-serif focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           disabled={isSynthesizing}
         />
       </div>
@@ -191,17 +191,17 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
       <div className="min-h-[300px]">
         {mode === "text" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-serif text-gray-700 mb-1">
               Describe your object
             </label>
             <textarea
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder="e.g., A colorful butterfly with intricate wing patterns..."
-              className="w-full h-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full h-64 px-3 py-2 border border-gray-300 rounded-lg font-serif focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               disabled={isSynthesizing}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 mt-1 font-serif">
               {textInput.length}/500 characters
             </p>
           </div>
@@ -209,7 +209,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
 
         {mode === "sketch" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-serif text-gray-700 mb-1">
               Draw your object
             </label>
             <div className="border-2 border-gray-300 rounded-lg overflow-hidden">
@@ -225,7 +225,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
             <button
               onClick={handleClearCanvas}
               disabled={isSynthesizing}
-              className="mt-2 px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors disabled:opacity-50"
+              className="mt-2 px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded font-caveat-brush hover:bg-gray-300 transition-colors disabled:opacity-50"
             >
               Clear Canvas
             </button>
@@ -234,7 +234,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
 
         {mode === "photo" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-serif text-gray-700 mb-1">
               Upload a reference photo
             </label>
             {!photoPreview ? (
@@ -276,7 +276,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
                     setPhotoFile(null);
                   }}
                   disabled={isSynthesizing}
-                  className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors disabled:opacity-50"
+                  className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded font-caveat-brush hover:bg-gray-300 transition-colors disabled:opacity-50"
                 >
                   Choose Different Photo
                 </button>
@@ -291,7 +291,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
         <button
           onClick={handleSynthesize}
           disabled={isSynthesizing}
-          className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-caveat-brush font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isSynthesizing ? (
             <>
@@ -327,7 +327,7 @@ export default function DoodlePad({ onSynthesize, isSynthesizing = false }: Dood
         {!isSynthesizing && (
           <button
             onClick={handleReset}
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-caveat-brush font-semibold hover:bg-gray-300 transition-colors"
           >
             Reset
           </button>

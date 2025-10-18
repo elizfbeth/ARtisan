@@ -20,6 +20,10 @@ export interface ObjectSynthesisInput {
   inputType: "sketch" | "text" | "photo";
   inputData: string; // Base64 image or text prompt
   inputName?: string;
+  existingObjects?: Array<{
+    position: { x: number; y: number; z: number };
+    scale: { x: number; y: number; z: number };
+  }>;
 }
 
 export interface ObjectSynthesisResult {
@@ -105,10 +109,20 @@ export async function executeObjectSynthesis(
   // Generate a name if not provided
   const objectName = input.inputName || generateObjectName(description);
   
-  // Default position: in front of camera at origin
-  const position = { x: 0, y: 1, z: -3 };
-  const rotation = { x: 0, y: 0, z: 0 };
-  const scale = { x: 1, y: 1, z: 1 };
+  // Calculate unique position for the new object
+  const position = calculateObjectPosition(input.existingObjects || []);
+  
+  // Add some variety with random rotation and scale
+  const rotation = { 
+    x: 0, 
+    y: Math.random() * Math.PI * 2, // Random Y rotation
+    z: 0 
+  };
+  const scale = { 
+    x: 0.8 + Math.random() * 0.4, // Random scale between 0.8 and 1.2
+    y: 0.8 + Math.random() * 0.4, 
+    z: 0.8 + Math.random() * 0.4 
+  };
   
   return {
     objectId,
@@ -176,6 +190,63 @@ export function validateObjectInput(input: ObjectSynthesisInput): {
   }
   
   return { valid: true };
+}
+
+/**
+ * Calculate a unique position for a new object to avoid overlaps
+ */
+function calculateObjectPosition(existingObjects: Array<{
+  position: { x: number; y: number; z: number };
+  scale: { x: number; y: number; z: number };
+}>): { x: number; y: number; z: number } {
+  const minDistance = 3; // Minimum distance between objects
+  const maxAttempts = 50;
+  
+  // Define possible positions in a grid pattern
+  const positions = [
+    { x: 0, y: 1, z: -3 },      // Center front
+    { x: -3, y: 1, z: -3 },     // Left front
+    { x: 3, y: 1, z: -3 },      // Right front
+    { x: 0, y: 1, z: -6 },      // Center back
+    { x: -3, y: 1, z: -6 },     // Left back
+    { x: 3, y: 1, z: -6 },      // Right back
+    { x: -6, y: 1, z: -3 },     // Far left
+    { x: 6, y: 1, z: -3 },      // Far right
+    { x: 0, y: 3, z: -3 },      // Center high
+    { x: -3, y: 3, z: -3 },     // Left high
+    { x: 3, y: 3, z: -3 },      // Right high
+  ];
+  
+  // Try to find a position that doesn't overlap with existing objects
+  for (let i = 0; i < Math.min(positions.length, maxAttempts); i++) {
+    const candidatePos = positions[i];
+    let isValid = true;
+    
+    // Check distance from all existing objects
+    for (const existingObj of existingObjects) {
+      const distance = Math.sqrt(
+        Math.pow(candidatePos.x - existingObj.position.x, 2) +
+        Math.pow(candidatePos.y - existingObj.position.y, 2) +
+        Math.pow(candidatePos.z - existingObj.position.z, 2)
+      );
+      
+      if (distance < minDistance) {
+        isValid = false;
+        break;
+      }
+    }
+    
+    if (isValid) {
+      return candidatePos;
+    }
+  }
+  
+  // If no valid position found, generate a random one
+  const randomX = (Math.random() - 0.5) * 10; // -5 to 5
+  const randomY = 1 + Math.random() * 2;      // 1 to 3
+  const randomZ = -3 - Math.random() * 5;     // -3 to -8
+  
+  return { x: randomX, y: randomY, z: randomZ };
 }
 
 /**
