@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import {
   fetchWorldTemplates,
   WorldTemplate,
-  MOCK_WORLD,
+  MOCK_WORLDS,
   worldToTemplate,
 } from "@/lib/worldlabs";
 
@@ -58,7 +58,7 @@ export default function WorldLabsTemplateBrowser({
         
         // Fallback to mock data for development
         console.log("Using mock World Labs data for development");
-        setTemplates([worldToTemplate(MOCK_WORLD)]);
+        setTemplates(MOCK_WORLDS.map(worldToTemplate));
         setError("Using demo data (API connection pending)");
       } finally {
         setLoading(false);
