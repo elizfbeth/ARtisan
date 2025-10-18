@@ -35,6 +35,7 @@ interface ARViewerProps {
   objects: SceneObject[];
   audioUrl?: string;
   onObjectMove?: (objectId: string, position: { x: number; y: number; z: number }) => void;
+  onObjectDelete?: (objectId: string) => void;
 }
 
 /**
@@ -60,9 +61,16 @@ function EnvironmentSphere({ textureUrl }: { textureUrl: string }) {
 /**
  * Scene object component - renders individual 3D objects
  */
-function SceneObject3D({ object }: { object: SceneObject }) {
+function SceneObject3D({ 
+  object, 
+  onDelete 
+}: { 
+  object: SceneObject; 
+  onDelete?: (objectId: string) => void;
+}) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
+  const [showDeleteButton, setShowDeleteButton] = useState(false);
   
   // Load texture (for now we're using images as textures on planes)
   // In production, this would load actual .glb models
@@ -71,6 +79,13 @@ function SceneObject3D({ object }: { object: SceneObject }) {
   useEffect(() => {
     document.body.style.cursor = hovered ? "pointer" : "auto";
   }, [hovered]);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete) {
+      onDelete(object.id);
+    }
+  };
 
   return (
     <mesh
@@ -90,11 +105,22 @@ function SceneObject3D({ object }: { object: SceneObject }) {
         emissive={hovered ? "#222222" : "#000000"}
       />
       
-      {/* Label */}
+      {/* Label and Delete Button */}
       {hovered && (
         <Html distanceFactor={10} position={[0, 1.2, 0]}>
-          <div className="bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm whitespace-nowrap">
-            {object.name}
+          <div className="bg-black bg-opacity-75 text-white px-2 py-1 rounded text-sm whitespace-nowrap flex items-center gap-2">
+            <span>{object.name}</span>
+            {onDelete && (
+              <button
+                onClick={handleDelete}
+                onMouseEnter={() => setShowDeleteButton(true)}
+                onMouseLeave={() => setShowDeleteButton(false)}
+                className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs transition-colors"
+                title="Delete object"
+              >
+                🗑️
+              </button>
+            )}
           </div>
         </Html>
       )}
@@ -183,9 +209,11 @@ function LoadingFallback() {
 function ARScene({
   environmentTextureUrl,
   objects,
+  onObjectDelete,
 }: {
   environmentTextureUrl?: string;
   objects: SceneObject[];
+  onObjectDelete?: (objectId: string) => void;
 }) {
   return (
     <>
@@ -212,7 +240,7 @@ function ARScene({
       {/* Scene objects */}
       {objects.map((obj) => (
         <Suspense key={obj.id} fallback={<LoadingFallback />}>
-          <SceneObject3D object={obj} />
+          <SceneObject3D object={obj} onDelete={onObjectDelete} />
         </Suspense>
       ))}
 
@@ -284,6 +312,7 @@ export default function ARViewer({
   objects,
   audioUrl,
   onObjectMove,
+  onObjectDelete,
 }: ARViewerProps) {
   return (
     <div className="relative w-full h-screen">
@@ -291,6 +320,7 @@ export default function ARViewer({
       <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-4 py-2 rounded">
         <p className="font-semibold mb-1">Controls:</p>
         <p className="text-sm">WASD - Move | Mouse - Look | E/Q - Up/Down</p>
+        <p className="text-sm mt-1">Hover over objects to delete them</p>
       </div>
 
       {/* 3D Canvas */}
@@ -302,6 +332,7 @@ export default function ARViewer({
           <ARScene
             environmentTextureUrl={environmentTextureUrl}
             objects={objects}
+            onObjectDelete={onObjectDelete}
           />
         </Suspense>
       </Canvas>

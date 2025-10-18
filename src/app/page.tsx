@@ -122,6 +122,25 @@ export default function Home() {
   };
 
   /**
+   * Handle deleting an object from the scene
+   */
+  const handleDeleteObject = useMutation(api.scenes.deleteObject);
+
+  const deleteObject = async (objectId: string) => {
+    if (!currentSceneId) return;
+    
+    try {
+      await handleDeleteObject({
+        sceneId: currentSceneId,
+        objectId,
+      });
+    } catch (error) {
+      console.error("Delete object error:", error);
+      alert("Failed to delete object. Please try again.");
+    }
+  };
+
+  /**
    * Handle returning to upload
    */
   const handleNewScene = () => {
@@ -239,6 +258,7 @@ export default function Home() {
                   scale: obj.scale,
                 }))}
                 audioUrl={scene.audioUrl}
+                onObjectDelete={deleteObject}
               />
             </div>
 
@@ -305,9 +325,16 @@ export default function Home() {
                       {scene.objects.map((obj) => (
                         <div
                           key={obj.id}
-                          className="p-2 bg-gray-50 rounded text-sm"
+                          className="p-2 bg-gray-50 rounded text-sm flex items-center justify-between group"
                         >
-                          {obj.name}
+                          <span className="truncate">{obj.name}</span>
+                          <button
+                            onClick={() => deleteObject(obj.id)}
+                            className="opacity-0 group-hover:opacity-100 bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs transition-all"
+                            title="Delete object"
+                          >
+                            🗑️
+                          </button>
                         </div>
                       ))}
                     </div>
