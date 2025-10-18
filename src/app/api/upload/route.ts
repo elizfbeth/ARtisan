@@ -72,11 +72,18 @@ export async function POST(request: NextRequest) {
 
     console.log("Scene created in Convex:", sceneId);
 
-    // Trigger scene generation workflow
+    // Trigger scene generation workflow directly
     // Note: This will be handled asynchronously
-    await convex.action(api.workflows.generateSceneWorkflow, {
-      sceneId,
-      photoUrl,
+    // We don't await it to return quickly to the client
+    fetch("http://localhost:3000/api/workflows/create-scene", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sceneId,
+        photoUrl,
+      }),
+    }).catch((error) => {
+      console.error("Failed to trigger workflow:", error);
     });
 
     console.log("Scene generation workflow triggered");

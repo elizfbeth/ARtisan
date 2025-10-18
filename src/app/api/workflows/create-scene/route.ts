@@ -15,8 +15,11 @@ import { api } from "@/convex/_generated/api";
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export async function POST(request: NextRequest) {
+  // Parse body once and store it
+  let body: { sceneId?: string; photoUrl?: string } = {};
+  
   try {
-    const body = await request.json();
+    body = await request.json();
     const { sceneId, photoUrl } = body;
 
     if (!sceneId || !photoUrl) {
@@ -75,7 +78,6 @@ export async function POST(request: NextRequest) {
 
     // Update scene status to error if we have a sceneId
     try {
-      const body = await request.clone().json();
       if (body.sceneId) {
         await convex.mutation(api.scenes.updateStatus, {
           sceneId: body.sceneId,

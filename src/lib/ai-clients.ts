@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { fal } from "@fal-ai/serverless-client";
+import * as fal from "@fal-ai/serverless-client";
 import Groq from "groq-sdk";
 
 /**
