@@ -270,4 +270,4 @@ Built with ❤️ using amazing sponsor tools:
 
 ---
 
-Made for [Hackathon Name] 2024
+Made for Cursor Hackathon 2025 by Glenn Liew, Elizabeth Lim, Rachel Tan (NUS)
