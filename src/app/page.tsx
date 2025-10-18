@@ -197,10 +197,10 @@ export default function Home() {
         {appState === "upload" && (
           <div className="flex flex-col items-center justify-center min-h-[70vh]">
             <div className="text-center mb-8">
-              <h2 className="text-4xl font-caveat-brush font-bold text-white mb-3">
+              <h2 className="text-4xl font-caveat-brush font-bold text-gray-800 mb-3">
                 Welcome to ARtisan
               </h2>
-              <p className="text-lg font-caveat-brush text-white max-w-2xl">
+              <p className="text-lg font-caveat-brush text-gray-700 max-w-2xl">
                 Upload a photo and watch as AI transforms it into an immersive AR experience.
                 Then bring your imagination to life by adding your own creations!
               </p>
@@ -361,9 +361,10 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="mt-16 py-8 text-center text-white text-sm font-serif">
+      <footer className="mt-16 py-8 text-center text-gray-700 text-sm font-serif">
         <p>
-          Built with ❤️ using Convex, Supabase, Gemini, Fal.ai, ElevenLabs & more
+          Built with ❤️ using Convex, Supabase, Gemini, Fal.ai, ElevenLabs & more <br />
+          <a href="https://www.freepik.com/free-photo/hand-painted-watercolor-background_10264354.htm">Background image by denamorado on Freepik</a>
         </p>
       </footer>
     </main>
